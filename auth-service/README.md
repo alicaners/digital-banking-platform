@@ -14,3 +14,12 @@ GET /api/auth/ping - Servisin ve veritabanı bağlantısının sağlık kontrol�
 
 ## Veritabanı
 PostgreSQL - auth_db
+
+## Güvenlik Notu
+
+Bu proje eğitim amaçlıdır, `application.yml` içinde `jwt.secret` gibi
+değerler için varsayılanlar bulunur. Gerçek bir prodüksiyon ortamında
+bu tür hassas değerler asla kod içine yazılmamalı; ortam değişkeni
+(bkz. proje kökündeki `.env.example`) ya da bir secret management
+servisi (HashiCorp Vault, AWS Secrets Manager vb.) üzerinden
+yönetilmelidir.
