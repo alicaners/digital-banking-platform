@@ -1,7 +1,7 @@
 # Auth Service
 
-Kullanıcı kimlik doğrulama servisi. Şu an sadece iskelet aşamasında,
-login/register ve JWT üretimi bir sonraki haftada eklenecek.
+Kullanıcı kimlik doğrulama servisi. Kayıt, giriş ve JWT token üretimi
+tamamlanmış durumda.
 
 ## Çalıştırma
 mvnw spring-boot:run
@@ -10,10 +10,17 @@ mvnw spring-boot:run
 8081
 
 ## Endpoint'ler
+POST /api/auth/register - Kullanıcı kaydı (token gerekmez)
+POST /api/auth/login - Giriş, JWT token döner (token gerekmez)
 GET /api/auth/ping - Servisin ve veritabanı bağlantısının sağlık kontrolü
 
 ## Veritabanı
 PostgreSQL - auth_db
+
+## Güvenlik
+Şifreler BCrypt ile hash'lenerek saklanır. Giriş sonrası dönen JWT
+token, Gateway seviyesinde doğrulanarak korumalı endpoint'lere erişim
+kontrolü sağlanır.
 
 ## Güvenlik Notu
 
