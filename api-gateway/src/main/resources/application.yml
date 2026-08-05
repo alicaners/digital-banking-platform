@@ -18,6 +18,10 @@ spring:
           uri: lb://CUSTOMER-SERVICE
           predicates:
             - Path=/api/customers/**
+        - id: account-service
+          uri: lb://ACCOUNT-SERVICE
+          predicates:
+            - Path=/api/accounts/**
 
 eureka:
   client:
