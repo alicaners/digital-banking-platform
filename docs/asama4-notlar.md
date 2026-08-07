@@ -23,3 +23,20 @@ olarak işaretleniyor ama bu sefer para gerçekten tutarsız bir
 durumda kalabilir. Gerçek prodüksiyon sistemlerinde bu, bir "dead
 letter queue" veya manuel müdahale süreciyle çözülür — bu projenin
 kapsamı dışında bırakıldı.
+
+## Hata Yönetimi İyileştirmeleri
+
+FeignException özel olarak yakalanarak, Account Service'in döndürdüğü
+gerçek hata mesajı (response body'sindeki "error" alanı) Jackson
+ObjectMapper ile parse edilip failureReason alanına aktarılıyor.
+JSON parse edilemezse (örn. servis tamamen erişilemezse), status
+koduna dayalı genel bir mesaja güvenli şekilde düşülüyor.
+
+**Test ile doğrulandı:**
+- Geçersiz hesaba transfer → "REVERSED", failureReason: "Hesap bulunamadı"
+- Yetersiz bakiye → "FAILED", failureReason: "Yetersiz bakiye"
+
+Dört serviste de (auth, customer, account, transaction) validation
+hataları (MethodArgumentNotValidException) artık GlobalExceptionHandler
+tarafından yakalanıp anlamlı alan bazlı mesajlarla dönüyor — Aşama 3'te
+not edilen sorun kapatıldı.

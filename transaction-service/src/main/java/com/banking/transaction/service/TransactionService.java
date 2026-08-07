@@ -8,6 +8,9 @@ import com.banking.transaction.entity.Transaction;
 import com.banking.transaction.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import feign.FeignException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 
 @Service
 public class TransactionService {
@@ -26,6 +29,7 @@ public class TransactionService {
         transaction.setAmount(request.getAmount());
 
         boolean withdrawSucceeded = false;
+        String failureReason = null;
 
         try {
             accountServiceClient.withdraw(
@@ -41,7 +45,20 @@ public class TransactionService {
 
             transaction.setStatus("COMPLETED");
 
+        } catch (FeignException e) {
+
+            failureReason = extractErrorMessage(e);
+
+            if (withdrawSucceeded) {
+                boolean compensationSucceeded = compensate(request);
+                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
+            } else {
+                transaction.setStatus("FAILED");
+            }
+
         } catch (Exception e) {
+
+            failureReason = "Beklenmeyen bir hata oluştu: " + e.getMessage();
 
             if (withdrawSucceeded) {
                 boolean compensationSucceeded = compensate(request);
@@ -53,7 +70,11 @@ public class TransactionService {
 
         transactionRepository.save(transaction);
 
-        return toResponse(transaction);
+        TransactionResponse response = toResponse(transaction);
+        if (failureReason != null) {
+            response.setFailureReason(failureReason);
+        }
+        return response;
     }
 
     private boolean compensate(TransferRequest request) {
@@ -65,6 +86,30 @@ public class TransactionService {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private String extractErrorMessage(FeignException e) {
+
+        try {
+            String responseBody = e.contentUTF8();
+            if (responseBody != null && !responseBody.isBlank()) {
+                ObjectMapper mapper = new ObjectMapper();
+                Map<String, Object> errorMap = mapper.readValue(responseBody, Map.class);
+                if (errorMap.containsKey("error")) {
+                    return errorMap.get("error").toString();
+                }
+            }
+        } catch (Exception parseException) {
+            // JSON parse edilemezse, aşağıdaki genel mesajlara düşüyoruz
+        }
+
+        if (e.status() == 404) {
+            return "Hesap bulunamadı";
+        } else if (e.status() >= 500) {
+            return "Hesap servisi şu anda yanıt vermiyor";
+        } else {
+            return "İşlem reddedildi";
         }
     }
 

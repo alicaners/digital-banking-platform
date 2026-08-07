@@ -1,7 +1,7 @@
 package com.banking.transaction.dto;
 
-import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public class TransactionResponse {
 
@@ -11,6 +11,7 @@ public class TransactionResponse {
     private BigDecimal amount;
     private String status;
     private LocalDateTime createdAt;
+    private String failureReason;
 
     public TransactionResponse(Long id, Long senderAccountId, Long receiverAccountId,
                                BigDecimal amount, String status, LocalDateTime createdAt) {
@@ -28,4 +29,7 @@ public class TransactionResponse {
     public BigDecimal getAmount() { return amount; }
     public String getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public String getFailureReason() { return failureReason; }
+    public void setFailureReason(String failureReason) { this.failureReason = failureReason; }
 }
