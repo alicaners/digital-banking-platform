@@ -1,4 +1,4 @@
-# Hafta 3 — Öğrenilenler ve Karşılaşılan Sorunlar
+# Aşama 3 — Öğrenilenler ve Karşılaşılan Sorunlar
 
 ## Kritik Gözlem: Distributed Transaction Problemi (Bilinçli Olarak Bırakıldı)
 
@@ -16,7 +16,7 @@ Bu, mikroservis mimarisinde "distributed transaction" problemi olarak
 bilinir — her servisin kendi ayrı veritabanı olduğu için, klasik
 veritabanı transaction'ları (ACID) burada işe yaramıyor.
 
-**Çözüm planı**: Hafta 4'te Saga Pattern (compensating transaction
+**Çözüm planı**: Aşama 4'te Saga Pattern (compensating transaction
 mantığıyla) bu sorunu çözeceğiz — deposit başarısız olursa, withdraw
 işlemini geri alan (paranın gönderen hesaba iade edildiği) bir
 mekanizma kuracağız.
@@ -45,7 +45,7 @@ bazen Invalidate Caches gerekiyor. Terminalden mvnw ile doğrulama
 yapmak, sorunun gerçek mi (pom.xml hatası) yoksa sadece IDE
 senkronizasyonu mu olduğunu ayırt etmede güvenilir bir yöntem oldu.
 
-## Bu Hafta Öğrenilenler
+## Bu Aşamada Öğrenilenler
 - BigDecimal ile doğru para hesaplaması (compareTo kullanımı, == veya
   <, > operatörleriyle asla karşılaştırılmaması gerektiği)
 - Optimistic locking (@Version) kavramı — kod seviyesinde uygulandı,
@@ -61,6 +61,6 @@ senkronizasyonu mu olduğunu ayırt etmede güvenilir bir yöntem oldu.
 - Account Service'te tüm hesapları listeleyen bir endpoint yok
 - Validation hata mesajları tüm servislerde tutarlı formatta değil
 
-## 4. Haftaya Not
+## 4. Aşamaya Not
 - Saga Pattern uygulanacak (compensating transaction)
 - Belki notification-service ve Kafka'ya giriş

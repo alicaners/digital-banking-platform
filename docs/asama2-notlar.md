@@ -1,9 +1,9 @@
-# Hafta 2 — Öğrenilenler ve Karşılaşılan Sorunlar
+# Aşama 2 — Öğrenilenler ve Karşılaşılan Sorunlar
 
 ## Karşılaşılan Sorunlar
 
 ### 1. customer-service ve api-gateway'de Tekrar Eden pom.xml Hataları
-Yeni proje oluştururken (customer-service) Hafta 1'deki aynı hatalar
+Yeni proje oluştururken (customer-service) Aşama 1'deki aynı hatalar
 tekrarlandı: yanlış Spring Boot versiyonu, var olmayan starter isimleri
 (spring-boot-starter-webmvc, spring-boot-starter-data-jpa-test vb.).
 Çözüm: Boot 3.3.4 + Spring Cloud 2023.0.3 + doğru starter isimlerini
@@ -16,7 +16,7 @@ ve Invalidate Caches bile ilk seferde yeterli gelmedi.
 Çözüm: pom.xml'in doğruluğu terminalden (mvnw dependency:tree ile)
 doğrulandı, sonrasında IDE senkronizasyonu düzeldi.
 
-## Bu Hafta Öğrenilenler
+## Bu Aşamada Öğrenilenler
 - BCrypt ile tek yönlü şifre hash'leme
 - JWT üretimi ve doğrulaması (jjwt kütüphanesi)
 - Spring Security'nin PasswordEncoder mekanizması
@@ -27,6 +27,6 @@ doğrulandı, sonrasında IDE senkronizasyonu düzeldi.
 - Route yapısını sadeleştirme: discovery locator yerine net,
   elle tanımlı route'lar
 
-## 3. Haftaya Not
+## 3. Aşamaya Not
 - Account Service ve Transaction Service eklenecek
 - Transaction Service'te Saga Pattern ele alınacak

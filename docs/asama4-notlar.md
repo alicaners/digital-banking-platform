@@ -1,14 +1,14 @@
-# Hafta 4 — Öğrenilenler ve Karşılaşılan Sorunlar
+# Aşama 4 — Öğrenilenler ve Karşılaşılan Sorunlar
 
 ## Saga Pattern Uygulaması (Compensating Transaction)
 
-Hafta 3'te tespit edilen distributed transaction problemi çözüldü.
+Aşama 3'te tespit edilen distributed transaction problemi çözüldü.
 transfer() metoduna, deposit aşamasında hata oluşursa withdraw
 işlemini geri alan (compensate) bir mekanizma eklendi.
 
 **Test ile doğrulandı**: Hesap 1'in bakiyesi 480 TL'ydi, geçersiz
 bir hesaba (9999) 50 TL transfer denendi. İşlem "REVERSED" olarak
-işaretlendi ve hesap 1'in bakiyesi tekrar 480 TL'ye döndü — Hafta 3'te
+işaretlendi ve hesap 1'in bakiyesi tekrar 480 TL'ye döndü — Aşama 3'te
 para kalıcı olarak kaybolurken, artık güvenli şekilde geri alınıyor.
 
 **Yeni transaction durumları:**

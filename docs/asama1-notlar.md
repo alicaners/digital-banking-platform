@@ -1,4 +1,4 @@
-# Hafta 1 — Öğrenilenler ve Karşılaşılan Sorunlar
+# Aşama 1 — Öğrenilenler ve Karşılaşılan Sorunlar
 
 ## Karşılaşılan Sorunlar ve Çözümleri
 
@@ -49,10 +49,10 @@ determine Dialect without JDBC metadata" gibi bağlantı hatası çıktı.
 Hem otomatik discovery locator hem elle tanımlı route aynı anda
 aktifken, `/auth-service/api/auth/ping` beklenirken sadece
 `/api/auth/ping` (elle tanımlı route'un predicate'ine uygun) çalıştı.
-Not: Bu, 2. haftada tüm servisler eklenirken tutarlı bir route
+Not: Bu, 2. aşamada tüm servisler eklenirken tutarlı bir route
 yapısıyla yeniden düzenlenecek.
 
-## Bu Hafta Öğrenilenler
+## Bu Aşamada Öğrenilenler
 
 - Mikroservis mimarisinde her servisin kendi veritabanı olması gerekliliği
 - Eureka ile service discovery mantığı
@@ -61,7 +61,7 @@ yapısıyla yeniden düzenlenecek.
 - Windows'ta port çakışmalarını netstat/tasklist ile teşhis etme
 - Java paket yapısı ile fiziksel klasör yapısının birebir eşleşmesi gerekliliği
 
-## 2. Haftaya Not
+## 2. Aşamaya Not
 
 - Gateway'deki route yapısı düzenlenecek: her yeni servis eklendikçe
   hem elle tanımlı route hem otomatik discovery locator karışıklık

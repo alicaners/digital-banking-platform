@@ -21,5 +21,5 @@ senkron HTTP çağrıları yapılır.
 ## Bilinen Sınırlama
 Şu anki transfer akışı, distributed transaction problemi içerir:
 gönderen hesaptan para düşürüldükten sonra alıcı hesaba eklenirken
-bir hata oluşursa, para geri iade edilmez. Bu, ilerleyen bir haftada
-Saga Pattern ile çözülecektir (docs/hafta3-notlar.md).
+bir hata oluşursa, para geri iade edilmez. Bu, ilerleyen bir aşamada
+Saga Pattern ile çözülecektir (bkz. docs/asama3-notlar.md).

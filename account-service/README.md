@@ -26,7 +26,7 @@ geçmek için.
 **Eşzamanlılık**: `Account` entity'sinde `@Version` alanı ile
 optimistic locking uygulanır. Kod seviyesinde doğrulandı; gerçek
 eşzamanlı çakışma senaryosu Postman ile manuel test edilemedi
-(bkz. docs/hafta3-notlar.md).
+(bkz. docs/asama3-notlar.md).
 
 **IBAN üretimi (basitleştirilmiş)**: Bu projede IBAN'lar, gerçek
 ISO 7064 (MOD 97-10) checksum algoritması ve resmi banka kodları

@@ -45,8 +45,8 @@ senkron HTTP çağrıları yapar (servis keşfi Eureka üzerinden).
 Transaction Service'teki transfer akışı şu anda distributed
 transaction problemi içerir: gönderen hesaptan para düşürüldükten
 sonra alıcı hesaba eklenirken bir hata oluşursa, para geri iade
-edilmez. Bu, Hafta 4'te Saga Pattern ile çözülecektir
-(bkz. docs/hafta3-notlar.md).
+edilmez. Bu, Aşama 4'te Saga Pattern ile çözülecektir
+(bkz. docs/asama3-notlar.md).
 
 ## Teknolojiler
 
@@ -54,6 +54,6 @@ Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16, Kafka, Docker,
 
 ## Durum
 
-🚧 Geliştirme aşamasında — Hafta 3 tamamlandı (Account Service: hesap
+🚧 Geliştirme aşamasında — Aşama 3 tamamlandı (Account Service: hesap
 yönetimi/bakiye işlemleri, Transaction Service: Feign Client ile
 servisler arası senkron iletişim, transfer akışı Saga öncesi haliyle)
