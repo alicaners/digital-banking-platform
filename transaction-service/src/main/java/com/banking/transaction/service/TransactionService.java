@@ -25,11 +25,14 @@ public class TransactionService {
         transaction.setReceiverAccountId(request.getReceiverAccountId());
         transaction.setAmount(request.getAmount());
 
+        boolean withdrawSucceeded = false;
+
         try {
             accountServiceClient.withdraw(
                     request.getSenderAccountId(),
                     new AmountRequest(request.getAmount())
             );
+            withdrawSucceeded = true;
 
             accountServiceClient.deposit(
                     request.getReceiverAccountId(),
@@ -39,12 +42,30 @@ public class TransactionService {
             transaction.setStatus("COMPLETED");
 
         } catch (Exception e) {
-            transaction.setStatus("FAILED");
+
+            if (withdrawSucceeded) {
+                boolean compensationSucceeded = compensate(request);
+                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
+            } else {
+                transaction.setStatus("FAILED");
+            }
         }
 
         transactionRepository.save(transaction);
 
         return toResponse(transaction);
+    }
+
+    private boolean compensate(TransferRequest request) {
+        try {
+            accountServiceClient.deposit(
+                    request.getSenderAccountId(),
+                    new AmountRequest(request.getAmount())
+            );
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private TransactionResponse toResponse(Transaction transaction) {
