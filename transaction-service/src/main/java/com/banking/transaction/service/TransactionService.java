@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import feign.FeignException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import com.banking.transaction.event.TransactionEvent;
+import com.banking.transaction.kafka.TransactionEventProducer;
 
 @Service
 public class TransactionService {
@@ -20,6 +22,9 @@ public class TransactionService {
 
     @Autowired
     private AccountServiceClient accountServiceClient;
+
+    @Autowired
+    private TransactionEventProducer eventProducer;
 
     public TransactionResponse transfer(TransferRequest request) {
 
@@ -69,6 +74,14 @@ public class TransactionService {
         }
 
         transactionRepository.save(transaction);
+
+        eventProducer.publish(new TransactionEvent(
+                transaction.getId(),
+                transaction.getSenderAccountId(),
+                transaction.getReceiverAccountId(),
+                transaction.getAmount(),
+                transaction.getStatus()
+        ));
 
         TransactionResponse response = toResponse(transaction);
         if (failureReason != null) {

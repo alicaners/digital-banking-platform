@@ -40,3 +40,30 @@ Dört serviste de (auth, customer, account, transaction) validation
 hataları (MethodArgumentNotValidException) artık GlobalExceptionHandler
 tarafından yakalanıp anlamlı alan bazlı mesajlarla dönüyor — Aşama 3'te
 not edilen sorun kapatıldı.
+
+## Notification Service ve Kafka'ya Giriş
+
+İlk kez asenkron servisler arası iletişim kuruldu. Transaction Service,
+her transfer sonrası (durumdan bağımsız) transaction-events topic'ine
+bir TransactionEvent mesajı yayınlıyor (KafkaTemplate ile). Notification
+Service, @KafkaListener ile bu topic'i dinleyip anlamlı bir bildirim
+mesajını log'a yazıyor (gerçek email/SMS gönderimi simüle edilmiyor,
+bilinçli olarak basitleştirildi).
+
+**Karşılaşılan sorun**: JsonSerializer, mesaj header'ına gönderen
+tarafın paket yolunu (com.banking.transaction.event.TransactionEvent)
+ekliyor. Notification Service'in kendi TransactionEvent kopyası farklı
+pakette (com.banking.notification.event) olduğu için ClassNotFoundException
+alındı. Çözüm: consumer tarafında spring.json.use.type.headers=false ve
+spring.json.value.default.type ile hedef sınıf açıkça belirtildi.
+
+**Test ile doğrulandı (bağımsızlık testi)**: Notification Service
+kapatılıp bir transfer yapıldı (işlem #16) — Transaction Service hiç
+etkilenmeden işlemi COMPLETED olarak tamamladı. Notification Service
+tekrar başlatıldığında, committed offset'ten devam ederek kaçırdığı
+mesajı otomatik yakaladı ve işledi. Bu, Kafka'nın servisleri
+birbirinden bağımsızlaştırma avantajını somut olarak kanıtladı.
+
+**Bilinen basitleştirme**: spring.json.trusted.packages "*" olarak
+ayarlandı (tüm paketlere güven) — gerçek bir prodüksiyon sisteminde
+sadece belirli, güvenilir paketlere izin verilirdi.
