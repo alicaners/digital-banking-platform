@@ -67,3 +67,21 @@ birbirinden bağımsızlaştırma avantajını somut olarak kanıtladı.
 **Bilinen basitleştirme**: spring.json.trusted.packages "*" olarak
 ayarlandı (tüm paketlere güven) — gerçek bir prodüksiyon sisteminde
 sadece belirli, güvenilir paketlere izin verilirdi.
+
+## Proje Genel Özeti (4 Aşama Sonunda)
+
+- 7 mikroservis: Eureka, Gateway, Auth, Customer, Account, Transaction, Notification
+- Merkezi kimlik doğrulama (JWT, Gateway seviyesinde)
+- Senkron iletişim: Feign Client (Transaction → Account)
+- Asenkron iletişim: Kafka (Transaction → Notification)
+- Distributed transaction yönetimi: Saga Pattern (compensating transaction)
+- Her servisin kendi veritabanı (database-per-service)
+- BigDecimal ile doğru para hesaplaması, optimistic locking
+- Docker Compose ile tüm altyapı (PostgreSQL, Kafka, Zookeeper)
+
+## Sonraki Adımlar (Planlanan, Henüz Yapılmadı)
+
+- Faz 4: Resilience4j ile Circuit Breaker, Retry, Rate Limiter; Redis cache
+- Faz 5: Unit/Integration test (Mockito, Testcontainers), Swagger/OpenAPI
+- Faz 6: Her servis için Dockerfile, uygulama servislerini de kapsayan
+  tam docker-compose.yml, GitHub Actions ile CI pipeline

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.banking.account.dto.AmountRequest;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/accounts")
@@ -24,6 +25,11 @@ public class AccountController {
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getAccountById(@PathVariable Long id) {
         return ResponseEntity.ok(accountService.getAccountById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<AccountResponse>> getAllAccounts() {
+        return ResponseEntity.ok(accountService.getAllAccounts());
     }
 
     @PostMapping("/{id}/deposit")

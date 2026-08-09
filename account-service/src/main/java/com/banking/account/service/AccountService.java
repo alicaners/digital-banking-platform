@@ -8,6 +8,7 @@ import com.banking.account.util.IbanGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 public class AccountService {
@@ -34,6 +35,13 @@ public class AccountService {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı"));
         return toResponse(account);
+    }
+
+    public List<AccountResponse> getAllAccounts() {
+        return accountRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     public AccountResponse deposit(Long accountId, BigDecimal amount) {

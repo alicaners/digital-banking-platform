@@ -11,6 +11,7 @@ mvnw spring-boot:run
 ## Endpoint'ler (Gateway üzerinden JWT token gerektirir)
 POST /api/accounts - Yeni hesap aç
 GET /api/accounts/{id} - Hesap bilgisi ve bakiye sorgula
+GET /api/accounts - Tüm hesapları listele
 POST /api/accounts/{id}/deposit - Hesaba para yatır
 POST /api/accounts/{id}/withdraw - Hesaptan para çek
 

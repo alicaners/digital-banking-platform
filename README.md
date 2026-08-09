@@ -16,8 +16,8 @@ Client → API Gateway (JWT doğrulama) → Eureka (Service Discovery) → İlgi
 | auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi |
 | customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD) |
 | account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, bakiye işlemleri |
-| transaction-service | ✅ Tamamlandı (Saga öncesi) | 8084 | Para transferi |
-| notification-service | ⏳ Planlandı | 8085 | Bildirimler |
+| transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Saga Pattern |
+| notification-service | ✅ Tamamlandı | 8085 | Kafka ile asenkron bildirim |
 
 ## Çalıştırma Sırası
 
@@ -28,6 +28,7 @@ Client → API Gateway (JWT doğrulama) → Eureka (Service Discovery) → İlgi
 5. Customer Service'i başlat: `cd customer-service && mvnw spring-boot:run`
 6. Account Service'i başlat: `cd account-service && mvnw spring-boot:run`
 7. Transaction Service'i başlat: `cd transaction-service && mvnw spring-boot:run`
+8. Notification Service'i başlat: `cd notification-service && mvnw spring-boot:run`
 
 ## Güvenlik
 
@@ -54,6 +55,7 @@ Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16, Kafka, Docker,
 
 ## Durum
 
-🚧 Geliştirme aşamasında — Aşama 3 tamamlandı (Account Service: hesap
-yönetimi/bakiye işlemleri, Transaction Service: Feign Client ile
-servisler arası senkron iletişim, transfer akışı Saga öncesi haliyle)
+✅ Temel mimari tamamlandı — 7 mikroservis, Eureka service discovery,
+Gateway üzerinden merkezi JWT doğrulama, senkron (Feign) ve asenkron
+(Kafka) servisler arası iletişim, Saga Pattern ile distributed
+transaction yönetimi.
