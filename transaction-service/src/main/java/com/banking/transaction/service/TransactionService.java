@@ -61,6 +61,19 @@ public class TransactionService {
                 transaction.setStatus("FAILED");
             }
 
+        } catch (RuntimeException e) {
+
+            failureReason = (e.getMessage() != null)
+                    ? e.getMessage()
+                    : "Hesap servisi şu anda kullanılamıyor";
+
+            if (withdrawSucceeded) {
+                boolean compensationSucceeded = compensate(request);
+                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
+            } else {
+                transaction.setStatus("FAILED");
+            }
+
         } catch (Exception e) {
 
             failureReason = "Beklenmeyen bir hata oluştu: " + e.getMessage();
