@@ -1,9 +1,10 @@
 package com.banking.account.dto;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public class AccountResponse {
+public class AccountResponse implements Serializable {
 
     private Long id;
     private String iban;

@@ -5,18 +5,18 @@ dijital bankacılık platformu simülasyonu.
 
 ## Mimari
 
-Client → API Gateway (JWT doğrulama) → Eureka (Service Discovery) → İlgili Mikroservis
+Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Discovery) → İlgili Mikroservis
 
 ## Servisler
 
 | Servis | Durum | Port | Açıklama |
 |---|---|---|---|
 | eureka-server | ✅ Tamamlandı | 8761 | Service Discovery |
-| api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama |
+| api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama + Rate Limiting |
 | auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi |
 | customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD) |
-| account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, bakiye işlemleri |
-| transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Saga Pattern |
+| account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, bakiye işlemleri, Redis cache |
+| transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Saga Pattern, Circuit Breaker, Retry |
 | notification-service | ✅ Tamamlandı | 8085 | Kafka ile asenkron bildirim |
 
 ## Çalıştırma Sırası
@@ -34,28 +34,47 @@ Client → API Gateway (JWT doğrulama) → Eureka (Service Discovery) → İlgi
 
 Tüm istekler API Gateway üzerinden geçer. `/api/auth/register` ve
 `/api/auth/login` hariç her endpoint, geçerli bir JWT token
-gerektirir. Şifreler BCrypt ile hash'lenerek saklanır.
+gerektirir. Şifreler BCrypt ile hash'lenerek saklanır. Gateway
+ayrıca tüm isteklere 10 saniyede 10 istek sınırı (Rate Limiting)
+uygular.
 
 ## Servisler Arası İletişim
 
 Transaction Service, Account Service'e Feign Client üzerinden
 senkron HTTP çağrıları yapar (servis keşfi Eureka üzerinden).
+Transaction Service, her işlem sonrası Kafka üzerinden Notification
+Service'e asenkron olay (event) yayınlar.
 
-## Bilinen Sınırlama
+## Distributed Transaction Yönetimi (Saga Pattern)
 
-Transaction Service'teki transfer akışı şu anda distributed
-transaction problemi içerir: gönderen hesaptan para düşürüldükten
-sonra alıcı hesaba eklenirken bir hata oluşursa, para geri iade
-edilmez. Bu, Aşama 4'te Saga Pattern ile çözülecektir
-(bkz. docs/asama3-notlar.md).
+Transfer sırasında gönderen hesaptan para düşürüldükten sonra alıcı
+hesaba eklenirken bir hata oluşursa, sistem otomatik olarak parayı
+gönderen hesaba geri iade eder (compensating transaction). Bu,
+Aşama 3'te tespit edilip Aşama 4'te çözülmüştür
+(bkz. docs/asama3-notlar.md ve docs/asama4-notlar.md).
+
+## Dayanıklılık ve Performans
+
+- **Circuit Breaker**: Account Service çökerse, Transaction Service
+  gereksiz beklemeden hızlı bir fallback cevabı döner.
+- **Retry**: Geçici bağlantı hatalarında otomatik olarak en fazla
+  3 kez tekrar deneme yapılır.
+- **Rate Limiter**: Gateway seviyesinde aşırı istek yüküne karşı
+  koruma sağlanır.
+- **Redis Cache**: Sık sorgulanan hesap verileri cache'lenir, bakiye
+  değiştiğinde cache otomatik tazelenir.
+
+(bkz. docs/asama5-notlar.md)
 
 ## Teknolojiler
 
-Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16, Kafka, Docker, JWT (jjwt), OpenFeign
+Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
+Kafka, Redis, Docker, JWT (jjwt), OpenFeign, Resilience4j, Spring Retry
 
 ## Durum
 
-✅ Temel mimari tamamlandı — 7 mikroservis, Eureka service discovery,
-Gateway üzerinden merkezi JWT doğrulama, senkron (Feign) ve asenkron
-(Kafka) servisler arası iletişim, Saga Pattern ile distributed
-transaction yönetimi.
+✅ Temel mimari ve dayanıklılık katmanı tamamlandı — 7 mikroservis,
+Eureka service discovery, Gateway üzerinden merkezi JWT doğrulama ve
+rate limiting, senkron (Feign) ve asenkron (Kafka) servisler arası
+iletişim, Saga Pattern ile distributed transaction yönetimi, Circuit
+Breaker/Retry ile hata toleransı, Redis ile performans optimizasyonu.

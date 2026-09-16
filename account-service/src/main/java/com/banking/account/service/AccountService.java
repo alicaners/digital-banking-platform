@@ -6,6 +6,8 @@ import com.banking.account.entity.Account;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,6 +33,7 @@ public class AccountService {
         return toResponse(account);
     }
 
+    @Cacheable(value = "accounts", key = "#id")
     public AccountResponse getAccountById(Long id) {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı"));
@@ -44,6 +47,7 @@ public class AccountService {
                 .toList();
     }
 
+    @CacheEvict(value = "accounts", key = "#accountId")
     public AccountResponse deposit(Long accountId, BigDecimal amount) {
 
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -59,6 +63,7 @@ public class AccountService {
         return toResponse(account);
     }
 
+    @CacheEvict(value = "accounts", key = "#accountId")
     public AccountResponse withdraw(Long accountId, BigDecimal amount) {
 
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {

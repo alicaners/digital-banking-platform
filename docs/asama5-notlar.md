@@ -79,3 +79,54 @@ göre değişse de) 429 alındı - bu, manuel/elle test etmenin doğal bir
 sınırlaması (network/tıklama zamanlaması tam saniyeye kilitlenemiyor).
 Mekanizmanın kendisinin doğru çalıştığı, sınırın gerçekten
 uygulandığı doğrulandı.
+
+## Redis ile Cache Katmanı
+
+Account Service'in getAccountById() metoduna @Cacheable, deposit()
+ve withdraw() metodlarına @CacheEvict eklendi. İlk sorgu veritabanından
+okunup Redis'e yazılıyor, sonraki aynı ID sorguları doğrudan Redis'ten
+dönüyor. Bakiye değiştiren işlemlerde ilgili hesabın cache kaydı
+otomatik siliniyor, böylece bir sonraki sorgu güncel veriyi
+veritabanından okuyup cache'i tazeliyor.
+
+**Karşılaşılan sorun (önemli, çözümü iki adım gerektirdi)**:
+1. Ana sınıfa (AccountServiceApplication) @EnableCaching eklenmesi
+   unutulmuştu. @Cacheable ve @CacheEvict annotation'ları doğru
+   yazılmış olmasına rağmen, bu annotation olmadan Spring cache
+   mekanizmasını hiç aktive etmiyordu — sessizce görmezden geliyordu,
+   hiçbir hata vermeden. Redis'e KEYS * ile bakıldığında hep boş
+   liste dönmesi bu sorunu ortaya çıkardı.
+2. @EnableCaching eklenip cache aktif olduktan sonra, bu sefer
+   "DefaultSerializer requires a Serializable payload but received
+   an object of type AccountResponse" hatası alındı. Çözüm:
+   AccountResponse sınıfına implements Serializable eklendi - Redis,
+   Java nesnelerini byte dizisine çevirmek için bu interface'e
+   ihtiyaç duyuyor.
+
+**Test ile doğrulandı (üç aşamalı)**:
+- İlk sorgu: Hibernate SQL logu terminalde göründü (cache miss,
+  veritabanına gidildi, Redis'e yazıldı)
+- Aynı sorgu tekrar: hiçbir SQL logu görünmedi (cache hit, doğrudan
+  Redis'ten okundu)
+- Bakiye değiştirildikten sonraki sorgu: SQL logu tekrar göründü
+  (cache invalidation çalıştı, güncel veri veritabanından okunup
+  cache yeniden dolduruldu)
+
+**Genel ders**: Bu iki sorun, art arda gelen "gizli" hatalara iyi bir
+örnek - ilk sorun (@EnableCaching eksikliği) hiçbir hata mesajı
+üretmediği için sadece "beklenen sonucun gerçekleşmemesi" (Redis'in
+boş kalması) ile fark edildi. İkinci sorun ise ancak birincisi
+çözüldükten sonra ortaya çıktı (cache mekanizması aktif olunca).
+
+## Aşama 5 Genel Özeti
+
+Bu aşamada sisteme üç dayanıklılık/performans katmanı eklendi:
+- Circuit Breaker: Account Service çökse bile Transaction Service
+  hızlı ve anlamlı bir hata dönebiliyor
+- Retry: geçici bağlantı hatalarında otomatik tekrar deneme
+- Rate Limiter: Gateway seviyesinde aşırı istek yüküne karşı koruma
+- Redis Cache: sık sorgulanan hesap verilerinde performans artışı
+
+## Sonraki Adımlar (Planlanan, Henüz Yapılmadı)
+- Faz 5: Unit/Integration test (Mockito, Testcontainers), Swagger/OpenAPI
+- Faz 6: Her servis için Dockerfile, tam docker-compose.yml, GitHub Actions CI

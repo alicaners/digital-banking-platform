@@ -36,6 +36,8 @@ Gerçek bir bankacılık sisteminde bu, merkez bankası tarafından
 sağlanan resmi kod listeleri ve checksum doğrulaması gerektirir —
 bu proje kapsamında bilinçli olarak basitleştirilmiştir.
 
-## Bilinen Eksik
-Tüm hesapları listeleyen bir endpoint henüz yok, sadece ID ile
-tekil sorgulama mevcut.
+## Performans (Cache)
+Hesap sorgulama (GET /api/accounts/{id}) sonuçları Redis'te
+cache'lenir. Bakiye değiştiren işlemlerde (deposit/withdraw) ilgili
+hesabın cache kaydı otomatik olarak temizlenir, böylece bir sonraki
+sorgu her zaman güncel veriyi yansıtır (bkz. docs/asama5-notlar.md).
