@@ -13,6 +13,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import com.banking.transaction.event.TransactionEvent;
 import com.banking.transaction.kafka.TransactionEventProducer;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
+import java.net.ConnectException;
+import com.banking.transaction.dto.AccountResponse;
 
 @Service
 public class TransactionService {
@@ -37,10 +41,7 @@ public class TransactionService {
         String failureReason = null;
 
         try {
-            accountServiceClient.withdraw(
-                    request.getSenderAccountId(),
-                    new AmountRequest(request.getAmount())
-            );
+            withdrawWithRetry(request.getSenderAccountId(), new AmountRequest(request.getAmount()));
             withdrawSucceeded = true;
 
             accountServiceClient.deposit(
@@ -101,6 +102,15 @@ public class TransactionService {
             response.setFailureReason(failureReason);
         }
         return response;
+    }
+
+    @Retryable(
+            retryFor = {ConnectException.class, java.io.IOException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 500)
+    )
+    public AccountResponse withdrawWithRetry(Long accountId, AmountRequest request) {
+        return accountServiceClient.withdraw(accountId, request);
     }
 
     private boolean compensate(TransferRequest request) {

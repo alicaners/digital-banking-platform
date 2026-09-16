@@ -15,9 +15,16 @@ Gateway, gelen isteklerdeki Authorization header'ını kontrol eder.
 bir JWT token gerektirir. Token eksik ya da geçersizse istek ilgili
 servise hiç ulaştırılmadan 401 Unauthorized döner.
 
+## Rate Limiting
+Tüm isteklere (JWT kontrolünden bile önce) global bir istek sınırı
+uygulanır: 10 saniyede en fazla 10 istek kabul edilir, aşımda
+429 Too Many Requests döner.
+
 ## Route'lar
-/api/auth/**      -> auth-service
-/api/customers/**  -> customer-service
+/api/auth/**          -> auth-service
+/api/customers/**     -> customer-service
+/api/accounts/**      -> account-service
+/api/transactions/**  -> transaction-service
 
 ## Örnek Kullanım
 POST http://localhost:8080/api/auth/register  (token gerekmez)

@@ -36,3 +36,11 @@ eureka:
 
 jwt:
   secret: ${JWT_SECRET:bankingPlatformSuperGizliAnahtarBuCokUzunOlmali123456789}
+
+resilience4j:
+  ratelimiter:
+    instances:
+      globalRateLimiter:
+        limit-for-period: 10
+        limit-refresh-period: 10s
+        timeout-duration: 0s
