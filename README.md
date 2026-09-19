@@ -7,6 +7,30 @@ dijital bankacılık platformu simülasyonu.
 
 Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Discovery) → İlgili Mikroservis
 
+```mermaid
+graph TD
+    Client[Client] --> Gateway[API Gateway<br/>JWT + Rate Limiting]
+    Gateway --> Eureka[Eureka Server<br/>Service Discovery]
+    Gateway --> Auth[Auth Service<br/>:8081]
+    Gateway --> Customer[Customer Service<br/>:8082]
+    Gateway --> Account[Account Service<br/>:8083<br/>Redis Cache]
+    Gateway --> Transaction[Transaction Service<br/>:8084<br/>Saga + Circuit Breaker]
+
+    Auth --> AuthDB[(auth_db)]
+    Customer --> CustomerDB[(customer_db)]
+    Account --> AccountDB[(account_db)]
+    Transaction --> TransactionDB[(transaction_db)]
+
+    Transaction -->|Feign Client| Account
+    Transaction -->|Kafka Event| Notification[Notification Service<br/>:8085]
+
+    Account -.->|Cache| Redis[(Redis)]
+
+    style Gateway fill:#4A90D9,color:#fff
+    style Eureka fill:#7B68EE,color:#fff
+    style Notification fill:#50C878,color:#fff
+```
+
 ## Servisler
 
 | Servis | Durum | Port | Açıklama |

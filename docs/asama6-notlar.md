@@ -98,5 +98,25 @@ hem de doğru Servers adresi (localhost üzerinden) görüntülendi.
 **Bilinçli kapsam kararı**: Eureka Server'a Swagger eklenmedi, çünkü
 kendi @RestController'ı yok, pratik faydası olmayacaktı.
 
-## Sonraki Adımlar (Planlanan, Henüz Yapılmadı)
-- Gün 3: Mimari diyagram, README toparlanması, faz kapanışı
+## Mimari Diyagram
+
+Ana README.md'ye Mermaid.js ile görsel bir sistem mimarisi diyagramı
+eklendi. Diyagram; Client, Gateway, Eureka, dört mikroservis, kendi
+veritabanları, Redis cache bağlantısı ve Kafka üzerinden Notification
+Service'e giden asenkron olay akışını tek bir şemada gösteriyor.
+Mermaid, düz metin olarak yazıldığı için GitHub tarafından otomatik
+render ediliyor - ayrı bir görsel dosya (PNG/JPG) yüklemeye gerek
+kalmadı, ileride servis eklenirse diyagram kolayca güncellenebilir.
+
+## Aşama 6 Genel Özeti
+
+Bu aşamada projeye üç önemli kalite katmanı eklendi:
+- Otomatik testler: 15 Unit test (Auth, Account, Transaction) +
+  2 Integration test (Account, gerçek PostgreSQL üzerinde)
+- API dokümantasyonu: 6 serviste Swagger/OpenAPI, Gateway üzerinden
+  merkezi bir sayfada toplanmış
+- Mimari diyagram: Ana README'ye Mermaid.js ile görsel sistem şeması
+
+## Sonraki Fazlar (Planlanan)
+- Faz 6 (DevOps): Her servis için Dockerfile, uygulama servislerini
+  de kapsayan tam docker-compose.yml, GitHub Actions ile CI pipeline
