@@ -12,7 +12,7 @@ Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Disco
 | Servis | Durum | Port | Açıklama |
 |---|---|---|---|
 | eureka-server | ✅ Tamamlandı | 8761 | Service Discovery |
-| api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama + Rate Limiting |
+| api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama + Rate Limiting + Merkezi Swagger |
 | auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi |
 | customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD) |
 | account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, bakiye işlemleri, Redis cache |
@@ -66,15 +66,29 @@ Aşama 3'te tespit edilip Aşama 4'te çözülmüştür
 
 (bkz. docs/asama5-notlar.md)
 
+## Test ve Dokümantasyon
+
+- **Unit testler (Mockito)**: Auth, Account ve Transaction Service'te
+  toplam 15 test, iş mantığının kritik senaryolarını kapsıyor.
+- **Integration test (Testcontainers)**: Account Service için gerçek
+  bir PostgreSQL container'ında çalışan testler.
+- **Swagger/OpenAPI**: Beş servisin API'si, Gateway üzerinden tek bir
+  merkezi sayfada toplandı: http://localhost:8080/swagger-ui.html
+
+(bkz. docs/asama6-notlar.md)
+
 ## Teknolojiler
 
 Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
-Kafka, Redis, Docker, JWT (jjwt), OpenFeign, Resilience4j, Spring Retry
+Kafka, Redis, Docker, JWT (jjwt), OpenFeign, Resilience4j, Spring Retry,
+JUnit 5, Mockito, Testcontainers, Springdoc OpenAPI
 
 ## Durum
 
-✅ Temel mimari ve dayanıklılık katmanı tamamlandı — 7 mikroservis,
-Eureka service discovery, Gateway üzerinden merkezi JWT doğrulama ve
-rate limiting, senkron (Feign) ve asenkron (Kafka) servisler arası
-iletişim, Saga Pattern ile distributed transaction yönetimi, Circuit
-Breaker/Retry ile hata toleransı, Redis ile performans optimizasyonu.
+✅ Temel mimari, dayanıklılık katmanı ve test/dokümantasyon
+altyapısı tamamlandı — 7 mikroservis, Eureka service discovery,
+Gateway üzerinden merkezi JWT doğrulama ve rate limiting, senkron
+(Feign) ve asenkron (Kafka) servisler arası iletişim, Saga Pattern
+ile distributed transaction yönetimi, Circuit Breaker/Retry ile hata
+toleransı, Redis ile performans optimizasyonu, otomatik testler ve
+merkezi API dokümantasyonu.

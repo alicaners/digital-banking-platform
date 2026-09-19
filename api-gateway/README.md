@@ -30,3 +30,11 @@ uygulanır: 10 saniyede en fazla 10 istek kabul edilir, aşımda
 POST http://localhost:8080/api/auth/register  (token gerekmez)
 POST http://localhost:8080/api/auth/login     (token gerekmez, JWT döner)
 GET  http://localhost:8080/api/customers      (Authorization: Bearer <token> gerekir)
+
+## API Dokümantasyonu (Merkezi)
+Tüm mikroservislerin API'leri, Gateway üzerinden tek bir sayfada
+toplanmıştır: http://localhost:8080/swagger-ui.html
+Sağ üstteki dropdown'dan istenen servis (Auth, Customer, Account,
+Transaction, Notification) seçilerek o servisin endpoint'leri
+incelenebilir. Bu dokümantasyon adresleri token gerektirmeden
+erişilebilir (bkz. docs/asama6-notlar.md).

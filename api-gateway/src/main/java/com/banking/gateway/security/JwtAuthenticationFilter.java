@@ -21,7 +21,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final List<String> openEndpoints = List.of(
             "/api/auth/register",
-            "/api/auth/login"
+            "/api/auth/login",
+            "/auth-service/v3/api-docs",
+            "/customer-service/v3/api-docs",
+            "/account-service/v3/api-docs",
+            "/transaction-service/v3/api-docs",
+            "/notification-service/v3/api-docs",
+            "/swagger-ui",
+            "/v3/api-docs"
     );
 
     @Override

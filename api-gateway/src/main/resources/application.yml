@@ -26,6 +26,36 @@ spring:
           uri: lb://TRANSACTION-SERVICE
           predicates:
             - Path=/api/transactions/**
+        - id: auth-service-docs
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/auth-service/v3/api-docs
+          filters:
+            - RewritePath=/auth-service/v3/api-docs, /v3/api-docs
+        - id: customer-service-docs
+          uri: lb://CUSTOMER-SERVICE
+          predicates:
+            - Path=/customer-service/v3/api-docs
+          filters:
+            - RewritePath=/customer-service/v3/api-docs, /v3/api-docs
+        - id: account-service-docs
+          uri: lb://ACCOUNT-SERVICE
+          predicates:
+            - Path=/account-service/v3/api-docs
+          filters:
+            - RewritePath=/account-service/v3/api-docs, /v3/api-docs
+        - id: transaction-service-docs
+          uri: lb://TRANSACTION-SERVICE
+          predicates:
+            - Path=/transaction-service/v3/api-docs
+          filters:
+            - RewritePath=/transaction-service/v3/api-docs, /v3/api-docs
+        - id: notification-service-docs
+          uri: lb://NOTIFICATION-SERVICE
+          predicates:
+            - Path=/notification-service/v3/api-docs
+          filters:
+            - RewritePath=/notification-service/v3/api-docs, /v3/api-docs
 
 eureka:
   client:
@@ -44,3 +74,17 @@ resilience4j:
         limit-for-period: 10
         limit-refresh-period: 10s
         timeout-duration: 0s
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: Auth Service
+        url: /auth-service/v3/api-docs
+      - name: Customer Service
+        url: /customer-service/v3/api-docs
+      - name: Account Service
+        url: /account-service/v3/api-docs
+      - name: Transaction Service
+        url: /transaction-service/v3/api-docs
+      - name: Notification Service
+        url: /notification-service/v3/api-docs

@@ -41,3 +41,11 @@ Hesap sorgulama (GET /api/accounts/{id}) sonuçları Redis'te
 cache'lenir. Bakiye değiştiren işlemlerde (deposit/withdraw) ilgili
 hesabın cache kaydı otomatik olarak temizlenir, böylece bir sonraki
 sorgu her zaman güncel veriyi yansıtır (bkz. docs/asama5-notlar.md).
+
+## Test
+Unit testler (Mockito) ve gerçek PostgreSQL üzerinde çalışan bir
+Integration test (Testcontainers) mevcuttur (bkz. docs/asama6-notlar.md).
+
+## API Dokümantasyonu
+http://localhost:8083/swagger-ui.html
+Merkezi (tüm servisler): http://localhost:8080/swagger-ui.html

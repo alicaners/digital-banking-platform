@@ -30,3 +30,11 @@ bu tür hassas değerler asla kod içine yazılmamalı; ortam değişkeni
 (bkz. proje kökündeki `.env.example`) ya da bir secret management
 servisi (HashiCorp Vault, AWS Secrets Manager vb.) üzerinden
 yönetilmelidir.
+
+## Test
+Unit testler (Mockito) ile register ve login metodlarının tüm
+senaryoları kapsanmıştır (bkz. docs/asama6-notlar.md).
+
+## API Dokümantasyonu
+http://localhost:8081/swagger-ui.html
+Merkezi (tüm servisler): http://localhost:8080/swagger-ui.html

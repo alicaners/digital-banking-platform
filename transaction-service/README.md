@@ -37,3 +37,12 @@ Account Service çökerse, sistem gereksiz yere beklemeden hızlı bir
 fallback cevabı döner. Geçici bağlantı hatalarında (ConnectException,
 IOException) @Retryable ile otomatik olarak en fazla 3 kez tekrar
 deneme yapılır (bkz. docs/asama5-notlar.md).
+
+## Test
+Unit testler (Mockito) ile transfer() metodunun dört Saga senaryosu
+(COMPLETED, FAILED, REVERSED, telafi başarısız) kapsanmıştır
+(bkz. docs/asama6-notlar.md).
+
+## API Dokümantasyonu
+http://localhost:8084/swagger-ui.html
+Merkezi (tüm servisler): http://localhost:8080/swagger-ui.html

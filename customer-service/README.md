@@ -23,3 +23,12 @@ PostgreSQL - customer_db
 Kimlik numarası (identityNumber) ve email alanları güncelleme
 işleminde değiştirilemez; bu alanlar sadece oluşturma sırasında
 belirlenir.
+
+## Test
+Bu servis için otomatik test kapsamı henüz eklenmedi (basit CRUD
+mantığı içerdiği için Aşama 6'da öncelikli olarak Auth, Account ve
+Transaction Service'lere odaklanıldı, bkz. docs/asama6-notlar.md).
+
+## API Dokümantasyonu
+http://localhost:8082/swagger-ui.html
+Merkezi (tüm servisler): http://localhost:8080/swagger-ui.html
