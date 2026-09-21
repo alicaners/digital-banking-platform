@@ -13,12 +13,16 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - banking-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: banking-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - banking-network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -30,14 +34,116 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - banking-network
 
   redis:
     image: redis:7
     container_name: banking-redis
     ports:
       - "6379:6379"
+    networks:
+      - banking-network
+
+  eureka-server:
+    image: eureka-server:latest
+    container_name: banking-eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - banking-network
+
+  api-gateway:
+    image: api-gateway:latest
+    container_name: banking-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - eureka-server
+    networks:
+      - banking-network
+
+  auth-service:
+    image: auth-service:latest
+    container_name: banking-auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - postgres
+      - eureka-server
+    networks:
+      - banking-network
+
+  customer-service:
+    image: customer-service:latest
+    container_name: banking-customer-service
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - postgres
+      - eureka-server
+    networks:
+      - banking-network
+
+  account-service:
+    image: account-service:latest
+    container_name: banking-account-service
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - postgres
+      - redis
+      - eureka-server
+    networks:
+      - banking-network
+
+  transaction-service:
+    image: transaction-service:latest
+    container_name: banking-transaction-service
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: postgres
+      KAFKA_HOST: kafka
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - postgres
+      - kafka
+      - eureka-server
+    networks:
+      - banking-network
+
+  notification-service:
+    image: notification-service:latest
+    container_name: banking-notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      KAFKA_HOST: kafka
+      EUREKA_HOST: eureka-server
+    depends_on:
+      - kafka
+      - eureka-server
+    networks:
+      - banking-network
 
 volumes:
   postgres-data:
+
+networks:
+  banking-network:
+    driver: bridge
