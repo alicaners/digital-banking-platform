@@ -65,7 +65,7 @@ eureka:
     prefer-ip-address: true
 
 jwt:
-  secret: ${JWT_SECRET:bankingPlatformSuperGizliAnahtarBuCokUzunOlmali123456789}
+  secret: ${JWT_SECRET}
 
 resilience4j:
   ratelimiter:

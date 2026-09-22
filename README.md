@@ -47,15 +47,33 @@ graph TD
 
 ## Çalıştırma
 
+**Önce bir kere:** Proje kök dizininde `.env.example` dosyasını
+`.env` olarak kopyala ve içindeki `JWT_SECRET` değerini kendi
+belirleyeceğin, en az 32 karakterlik güçlü bir değerle doldur:
+
+```bash
+copy .env.example .env
+```
+
+(Bu adım olmadan auth-service ve api-gateway, JWT_SECRET bulamadığı
+için başlamaz.)
+
 **En kolay yol — Docker Compose ile tüm sistemi tek komutla ayağa kaldırmak:**
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 Bu komut, altyapıyı (PostgreSQL, Kafka, Zookeeper, Redis) ve yedi
 mikroservisi hep birlikte, doğru sırayla başlatır — IntelliJ veya
-Maven kurmaya gerek kalmadan.
+Maven kurmaya gerek kalmadan. `--build` bayrağı, ilk çalıştırmada
+image'ların Dockerfile'lardan sıfırdan inşa edilmesini sağlar; sonraki
+çalıştırmalarda `--build` olmadan da (`docker compose up -d`) kullanılabilir.
+
+**Güvenlik notu:** Sadece api-gateway'in portu (8080) dışarıya açıktır.
+Diğer altı mikroservis yalnızca Docker network'ü içinden erişilebilir —
+tüm istekler zorunlu olarak Gateway üzerinden (ve dolayısıyla JWT
+kontrolünden) geçer.
 
 **Alternatif — Her servisi elle, IntelliJ/terminal üzerinden çalıştırmak:**
 
@@ -120,8 +138,8 @@ Aşama 3'te tespit edilip Aşama 4'te çözülmüştür
 - **Docker**: Her servis, multi-stage build ile optimize edilmiş
   (165-206MB) bağımsız bir image olarak build edilebiliyor.
 - **Docker Compose**: Tüm sistem (11 container — 4 altyapı + 7
-  uygulama), tek bir `docker compose up -d` komutuyla, ortak bir
-  Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
+  uygulama), tek bir `docker compose up -d --build` komutuyla, ortak
+  bir Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
 - **GitHub Actions (CI)**: Her push'ta, yedi servisin her biri ayrı
   ayrı otomatik olarak derlenip test ediliyor (bkz. yukarıdaki badge).
 
@@ -143,3 +161,7 @@ transaction yönetimi, Circuit Breaker/Retry ile hata toleransı, Redis
 ile performans optimizasyonu, otomatik testler (Unit + Integration),
 merkezi API dokümantasyonu (Swagger), Docker ile tam konteynerleştirme
 ve GitHub Actions ile sürekli entegrasyon (CI).
+
+Devam eden çalışma: bir güvenlik/mimari incelemesi sonrası tespit
+edilen bulgular doğrultusunda sağlamlaştırma (hardening) çalışmaları
+sürdürülüyor (bkz. docs/asama8-notlar.md).

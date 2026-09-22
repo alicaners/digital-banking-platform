@@ -48,33 +48,37 @@ services:
       - banking-network
 
   eureka-server:
+    build:
+      context: ./eureka-server
     image: eureka-server:latest
     container_name: banking-eureka-server
-    ports:
-      - "8761:8761"
     networks:
       - banking-network
 
   api-gateway:
+    build:
+      context: ./api-gateway
     image: api-gateway:latest
     container_name: banking-api-gateway
     ports:
       - "8080:8080"
     environment:
       EUREKA_HOST: eureka-server
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - eureka-server
     networks:
       - banking-network
 
   auth-service:
+    build:
+      context: ./auth-service
     image: auth-service:latest
     container_name: banking-auth-service
-    ports:
-      - "8081:8081"
     environment:
       DB_HOST: postgres
       EUREKA_HOST: eureka-server
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - postgres
       - eureka-server
@@ -82,10 +86,10 @@ services:
       - banking-network
 
   customer-service:
+    build:
+      context: ./customer-service
     image: customer-service:latest
     container_name: banking-customer-service
-    ports:
-      - "8082:8082"
     environment:
       DB_HOST: postgres
       EUREKA_HOST: eureka-server
@@ -96,10 +100,10 @@ services:
       - banking-network
 
   account-service:
+    build:
+      context: ./account-service
     image: account-service:latest
     container_name: banking-account-service
-    ports:
-      - "8083:8083"
     environment:
       DB_HOST: postgres
       REDIS_HOST: redis
@@ -112,10 +116,10 @@ services:
       - banking-network
 
   transaction-service:
+    build:
+      context: ./transaction-service
     image: transaction-service:latest
     container_name: banking-transaction-service
-    ports:
-      - "8084:8084"
     environment:
       DB_HOST: postgres
       KAFKA_HOST: kafka
@@ -128,10 +132,10 @@ services:
       - banking-network
 
   notification-service:
+    build:
+      context: ./notification-service
     image: notification-service:latest
     container_name: banking-notification-service
-    ports:
-      - "8085:8085"
     environment:
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
