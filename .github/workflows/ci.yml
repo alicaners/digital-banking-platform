@@ -1,0 +1,37 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service:
+          - eureka-server
+          - api-gateway
+          - auth-service
+          - customer-service
+          - account-service
+          - transaction-service
+          - notification-service
+
+    steps:
+      - name: Kaynak kodu indir
+        uses: actions/checkout@v4
+
+      - name: Java 21 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: ${{ matrix.service }} - Build ve Unit Test
+        working-directory: ${{ matrix.service }}
+        run: mvn clean verify
