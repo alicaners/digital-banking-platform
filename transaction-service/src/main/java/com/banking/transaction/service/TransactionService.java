@@ -30,7 +30,7 @@ public class TransactionService {
     @Autowired
     private TransactionEventProducer eventProducer;
 
-    public TransactionResponse transfer(TransferRequest request) {
+    public TransactionResponse transfer(TransferRequest request, Long userId) {
 
         Transaction transaction = new Transaction();
         transaction.setSenderAccountId(request.getSenderAccountId());
@@ -41,12 +41,13 @@ public class TransactionService {
         String failureReason = null;
 
         try {
-            withdrawWithRetry(request.getSenderAccountId(), new AmountRequest(request.getAmount()));
+            withdrawWithRetry(request.getSenderAccountId(), new AmountRequest(request.getAmount()), userId);
             withdrawSucceeded = true;
 
             accountServiceClient.deposit(
                     request.getReceiverAccountId(),
-                    new AmountRequest(request.getAmount())
+                    new AmountRequest(request.getAmount()),
+                    userId
             );
 
             transaction.setStatus("COMPLETED");
@@ -56,7 +57,7 @@ public class TransactionService {
             failureReason = extractErrorMessage(e);
 
             if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request);
+                boolean compensationSucceeded = compensate(request, userId);
                 transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
             } else {
                 transaction.setStatus("FAILED");
@@ -69,7 +70,7 @@ public class TransactionService {
                     : "Hesap servisi şu anda kullanılamıyor";
 
             if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request);
+                boolean compensationSucceeded = compensate(request, userId);
                 transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
             } else {
                 transaction.setStatus("FAILED");
@@ -80,7 +81,7 @@ public class TransactionService {
             failureReason = "Beklenmeyen bir hata oluştu: " + e.getMessage();
 
             if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request);
+                boolean compensationSucceeded = compensate(request, userId);
                 transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
             } else {
                 transaction.setStatus("FAILED");
@@ -109,15 +110,16 @@ public class TransactionService {
             maxAttempts = 3,
             backoff = @Backoff(delay = 500)
     )
-    public AccountResponse withdrawWithRetry(Long accountId, AmountRequest request) {
-        return accountServiceClient.withdraw(accountId, request);
+    public AccountResponse withdrawWithRetry(Long accountId, AmountRequest request, Long userId) {
+        return accountServiceClient.withdraw(accountId, request, userId);
     }
 
-    private boolean compensate(TransferRequest request) {
+    private boolean compensate(TransferRequest request, Long userId) {
         try {
             accountServiceClient.deposit(
                     request.getSenderAccountId(),
-                    new AmountRequest(request.getAmount())
+                    new AmountRequest(request.getAmount()),
+                    userId
             );
             return true;
         } catch (Exception e) {

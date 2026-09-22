@@ -18,27 +18,40 @@ public class AccountController {
     private AccountService accountService;
 
     @PostMapping
-    public ResponseEntity<AccountResponse> openAccount(@Valid @RequestBody AccountRequest request) {
-        return ResponseEntity.ok(accountService.openAccount(request));
+    public ResponseEntity<AccountResponse> openAccount(
+            @Valid @RequestBody AccountRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(accountService.openAccount(request, userId));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AccountResponse> getAccountById(@PathVariable Long id) {
-        return ResponseEntity.ok(accountService.getAccountById(id));
+    public ResponseEntity<AccountResponse> getAccountById(
+            @PathVariable Long id,
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-User-Role") String role) {
+        return ResponseEntity.ok(accountService.getAccountById(id, userId, role));
     }
 
     @GetMapping
-    public ResponseEntity<List<AccountResponse>> getAllAccounts() {
-        return ResponseEntity.ok(accountService.getAllAccounts());
+    public ResponseEntity<List<AccountResponse>> getAllAccounts(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-User-Role") String role) {
+        return ResponseEntity.ok(accountService.getAllAccounts(userId, role));
     }
 
     @PostMapping("/{id}/deposit")
-    public ResponseEntity<AccountResponse> deposit(@PathVariable Long id, @Valid @RequestBody AmountRequest request) {
-        return ResponseEntity.ok(accountService.deposit(id, request.getAmount()));
+    public ResponseEntity<AccountResponse> deposit(
+            @PathVariable Long id,
+            @Valid @RequestBody AmountRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(accountService.deposit(id, request.getAmount(), userId));
     }
 
     @PostMapping("/{id}/withdraw")
-    public ResponseEntity<AccountResponse> withdraw(@PathVariable Long id, @Valid @RequestBody AmountRequest request) {
-        return ResponseEntity.ok(accountService.withdraw(id, request.getAmount()));
+    public ResponseEntity<AccountResponse> withdraw(
+            @PathVariable Long id,
+            @Valid @RequestBody AmountRequest request,
+            @RequestHeader("X-User-Id") Long userId) {
+        return ResponseEntity.ok(accountService.withdraw(id, request.getAmount(), userId));
     }
 }

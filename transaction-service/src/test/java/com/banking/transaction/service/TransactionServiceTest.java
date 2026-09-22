@@ -37,6 +37,7 @@ class TransactionServiceTest {
     private TransactionService transactionService;
 
     private TransferRequest transferRequest;
+    private static final Long TEST_USER_ID = 1L;
 
     @BeforeEach
     void setUp() {
@@ -52,12 +53,12 @@ class TransactionServiceTest {
     @Test
     void transfer_bothStepsSucceed_returnsCompletedStatus() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class)))
+        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
 
-        TransactionResponse response = transactionService.transfer(transferRequest);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
 
         assertEquals("COMPLETED", response.getStatus());
         assertNull(response.getFailureReason());
@@ -67,44 +68,44 @@ class TransactionServiceTest {
     @Test
     void transfer_withdrawFails_returnsFailedStatusAndNeverAttemptsDeposit() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Yetersiz bakiye"));
 
-        TransactionResponse response = transactionService.transfer(transferRequest);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
 
         assertEquals("FAILED", response.getStatus());
         assertEquals("Yetersiz bakiye", response.getFailureReason());
-        verify(accountServiceClient, never()).deposit(anyLong(), any(AmountRequest.class));
+        verify(accountServiceClient, never()).deposit(anyLong(), any(AmountRequest.class), anyLong());
     }
 
     @Test
     void transfer_depositFailsButCompensationSucceeds_returnsReversedStatus() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class)))
+        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Hesap bulunamadı"));
-        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
 
-        TransactionResponse response = transactionService.transfer(transferRequest);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
 
         assertEquals("REVERSED", response.getStatus());
         assertEquals("Hesap bulunamadı", response.getFailureReason());
-        verify(accountServiceClient, times(1)).deposit(eq(1L), any(AmountRequest.class));
+        verify(accountServiceClient, times(1)).deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID));
     }
 
     @Test
     void transfer_depositAndCompensationBothFail_returnsFailedStatus() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class)))
+        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Hesap bulunamadı"));
-        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class)))
+        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Hesap servisi kapalı"));
 
-        TransactionResponse response = transactionService.transfer(transferRequest);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
 
         assertEquals("FAILED", response.getStatus());
     }

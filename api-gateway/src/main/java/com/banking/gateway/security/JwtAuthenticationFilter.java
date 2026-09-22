@@ -53,7 +53,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return unauthorized(exchange);
         }
 
-        return chain.filter(exchange);
+        Long userId = jwtValidator.getUserId(token);
+        String role = jwtValidator.getRole(token);
+
+        ServerHttpRequest mutatedRequest = request.mutate()
+                .header("X-User-Id", String.valueOf(userId))
+                .header("X-User-Role", role)
+                .build();
+
+        ServerWebExchange mutatedExchange = exchange.mutate()
+                .request(mutatedRequest)
+                .build();
+
+        return chain.filter(mutatedExchange);
     }
 
     private boolean isOpenEndpoint(String path) {

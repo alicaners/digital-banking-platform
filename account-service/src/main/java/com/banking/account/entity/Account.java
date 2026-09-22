@@ -12,6 +12,9 @@ public class Account {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @Column(nullable = false, unique = true)
     private String iban;
 
@@ -46,6 +49,9 @@ public class Account {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public String getIban() { return iban; }
     public void setIban(String iban) { this.iban = iban; }

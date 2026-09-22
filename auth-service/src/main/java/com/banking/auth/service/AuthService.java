@@ -52,7 +52,7 @@ public class AuthService {
             throw new IllegalArgumentException("Kullanıcı adı veya şifre hatalı");
         }
 
-        String token = jwtTokenProvider.generateToken(user.getUsername());
+        String token = jwtTokenProvider.generateToken(user.getId(), user.getUsername(), user.getRole());
 
         return new AuthResponse(user.getUsername(), user.getEmail(), "Giriş başarılı", token);
     }

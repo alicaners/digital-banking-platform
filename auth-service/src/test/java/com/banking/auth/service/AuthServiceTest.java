@@ -49,6 +49,7 @@ class AuthServiceTest {
         loginRequest.setPassword("sifre123");
 
         existingUser = new User();
+        existingUser.setId(1L);
         existingUser.setUsername("testuser");
         existingUser.setEmail("test@example.com");
         existingUser.setPassword("hashedPassword");
@@ -104,7 +105,7 @@ class AuthServiceTest {
 
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(existingUser));
         when(passwordEncoder.matches("sifre123", "hashedPassword")).thenReturn(true);
-        when(jwtTokenProvider.generateToken("testuser")).thenReturn("sahte.jwt.token");
+        when(jwtTokenProvider.generateToken(1L, "testuser", "CUSTOMER")).thenReturn("sahte.jwt.token");
 
         AuthResponse response = authService.login(loginRequest);
 
@@ -125,7 +126,7 @@ class AuthServiceTest {
         );
 
         assertEquals("Kullanıcı adı veya şifre hatalı", exception.getMessage());
-        verify(jwtTokenProvider, never()).generateToken(anyString());
+        verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -140,6 +141,6 @@ class AuthServiceTest {
         );
 
         assertEquals("Kullanıcı adı veya şifre hatalı", exception.getMessage());
-        verify(jwtTokenProvider, never()).generateToken(anyString());
+        verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
     }
 }

@@ -2,6 +2,7 @@ package com.banking.account.service;
 
 import com.banking.account.dto.AccountResponse;
 import com.banking.account.entity.Account;
+import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,11 +31,14 @@ class AccountServiceTest {
     private AccountService accountService;
 
     private Account existingAccount;
+    private static final Long OWNER_USER_ID = 10L;
+    private static final Long OTHER_USER_ID = 20L;
 
     @BeforeEach
     void setUp() {
         existingAccount = new Account();
         existingAccount.setId(1L);
+        existingAccount.setUserId(OWNER_USER_ID);
         existingAccount.setIban("TR123456789012345678901234");
         existingAccount.setCustomerId(1L);
         existingAccount.setBalance(new BigDecimal("500.00"));
@@ -48,7 +52,7 @@ class AccountServiceTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(existingAccount));
         when(accountRepository.save(any(Account.class))).thenReturn(existingAccount);
 
-        AccountResponse response = accountService.deposit(1L, new BigDecimal("100.00"));
+        AccountResponse response = accountService.deposit(1L, new BigDecimal("100.00"), OWNER_USER_ID);
 
         assertEquals(new BigDecimal("600.00"), response.getBalance());
         verify(accountRepository, times(1)).save(existingAccount);
@@ -59,7 +63,7 @@ class AccountServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> accountService.deposit(1L, new BigDecimal("-50.00"))
+                () -> accountService.deposit(1L, new BigDecimal("-50.00"), OWNER_USER_ID)
         );
 
         assertEquals("Yatırılacak miktar sıfırdan büyük olmalı", exception.getMessage());
@@ -72,7 +76,7 @@ class AccountServiceTest {
         when(accountRepository.findById(1L)).thenReturn(Optional.of(existingAccount));
         when(accountRepository.save(any(Account.class))).thenReturn(existingAccount);
 
-        AccountResponse response = accountService.withdraw(1L, new BigDecimal("200.00"));
+        AccountResponse response = accountService.withdraw(1L, new BigDecimal("200.00"), OWNER_USER_ID);
 
         assertEquals(new BigDecimal("300.00"), response.getBalance());
         verify(accountRepository, times(1)).save(existingAccount);
@@ -85,10 +89,24 @@ class AccountServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> accountService.withdraw(1L, new BigDecimal("999999.00"))
+                () -> accountService.withdraw(1L, new BigDecimal("999999.00"), OWNER_USER_ID)
         );
 
         assertEquals("Yetersiz bakiye", exception.getMessage());
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    @Test
+    void withdraw_notOwner_throwsAccessDeniedException() {
+
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(existingAccount));
+
+        AccessDeniedException exception = assertThrows(
+                AccessDeniedException.class,
+                () -> accountService.withdraw(1L, new BigDecimal("100.00"), OTHER_USER_ID)
+        );
+
+        assertEquals("Bu hesap üzerinde işlem yapma yetkiniz yok", exception.getMessage());
         verify(accountRepository, never()).save(any(Account.class));
     }
 
@@ -99,9 +117,32 @@ class AccountServiceTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> accountService.getAccountById(99L)
+                () -> accountService.getAccountById(99L, OWNER_USER_ID, "CUSTOMER")
         );
 
         assertEquals("Hesap bulunamadı", exception.getMessage());
+    }
+
+    @Test
+    void getAccountById_notOwnerNotAdmin_throwsAccessDeniedException() {
+
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(existingAccount));
+
+        AccessDeniedException exception = assertThrows(
+                AccessDeniedException.class,
+                () -> accountService.getAccountById(1L, OTHER_USER_ID, "CUSTOMER")
+        );
+
+        assertEquals("Bu hesaba erişim yetkiniz yok", exception.getMessage());
+    }
+
+    @Test
+    void getAccountById_adminRole_bypassesOwnershipCheck() {
+
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(existingAccount));
+
+        AccountResponse response = accountService.getAccountById(1L, OTHER_USER_ID, "ADMIN");
+
+        assertEquals(1L, response.getId());
     }
 }

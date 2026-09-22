@@ -8,12 +8,12 @@ import org.springframework.stereotype.Component;
 public class AccountServiceClientFallback implements AccountServiceClient {
 
     @Override
-    public AccountResponse deposit(Long id, AmountRequest request) {
+    public AccountResponse deposit(Long id, AmountRequest request, Long userId) {
         throw new RuntimeException("Hesap servisi şu anda kullanılamıyor (fallback devreye girdi)");
     }
 
     @Override
-    public AccountResponse withdraw(Long id, AmountRequest request) {
+    public AccountResponse withdraw(Long id, AmountRequest request, Long userId) {
         throw new RuntimeException("Hesap servisi şu anda kullanılamıyor (fallback devreye girdi)");
     }
 }

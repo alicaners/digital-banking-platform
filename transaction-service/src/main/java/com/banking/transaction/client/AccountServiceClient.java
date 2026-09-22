@@ -6,13 +6,14 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 @FeignClient(name = "account-service", fallback = AccountServiceClientFallback.class)
 public interface AccountServiceClient {
 
     @PostMapping("/api/accounts/{id}/deposit")
-    AccountResponse deposit(@PathVariable("id") Long id, @RequestBody AmountRequest request);
+    AccountResponse deposit(@PathVariable("id") Long id, @RequestBody AmountRequest request, @RequestHeader("X-User-Id") Long userId);
 
     @PostMapping("/api/accounts/{id}/withdraw")
-    AccountResponse withdraw(@PathVariable("id") Long id, @RequestBody AmountRequest request);
+    AccountResponse withdraw(@PathVariable("id") Long id, @RequestBody AmountRequest request, @RequestHeader("X-User-Id") Long userId);
 }

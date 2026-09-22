@@ -38,6 +38,8 @@ class AccountServiceIntegrationTest {
     @Autowired
     private AccountService accountService;
 
+    private static final Long TEST_USER_ID = 1L;
+
     @Test
     void openAccount_savesAndRetrievesFromRealDatabase() {
 
@@ -45,13 +47,13 @@ class AccountServiceIntegrationTest {
         request.setCustomerId(1L);
         request.setCurrency("TRY");
 
-        AccountResponse created = accountService.openAccount(request);
+        AccountResponse created = accountService.openAccount(request, TEST_USER_ID);
 
         assertNotNull(created.getId());
         assertEquals(0, BigDecimal.ZERO.compareTo(created.getBalance()));
         assertNotNull(created.getIban());
 
-        AccountResponse fetched = accountService.getAccountById(created.getId());
+        AccountResponse fetched = accountService.getAccountById(created.getId(), TEST_USER_ID, "CUSTOMER");
         assertEquals(created.getId(), fetched.getId());
         assertEquals("TRY", fetched.getCurrency());
     }
@@ -62,12 +64,12 @@ class AccountServiceIntegrationTest {
         AccountRequest request = new AccountRequest();
         request.setCustomerId(2L);
         request.setCurrency("TRY");
-        AccountResponse account = accountService.openAccount(request);
+        AccountResponse account = accountService.openAccount(request, TEST_USER_ID);
 
-        accountService.deposit(account.getId(), new BigDecimal("500.00"));
-        accountService.withdraw(account.getId(), new BigDecimal("150.00"));
+        accountService.deposit(account.getId(), new BigDecimal("500.00"), TEST_USER_ID);
+        accountService.withdraw(account.getId(), new BigDecimal("150.00"), TEST_USER_ID);
 
-        AccountResponse result = accountService.getAccountById(account.getId());
+        AccountResponse result = accountService.getAccountById(account.getId(), TEST_USER_ID, "CUSTOMER");
         assertEquals(new BigDecimal("350.00"), result.getBalance());
     }
 }
