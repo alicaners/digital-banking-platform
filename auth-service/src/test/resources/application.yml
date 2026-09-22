@@ -14,3 +14,7 @@ spring:
 eureka:
   client:
     enabled: false
+
+jwt:
+  secret: testOrtamiIcinGizliAnahtarBuCokUzunOlmaliEnAz32Karakter
+  expiration: 3600000
