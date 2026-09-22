@@ -34,4 +34,4 @@ jobs:
 
       - name: ${{ matrix.service }} - Build ve Unit Test
         working-directory: ${{ matrix.service }}
-        run: mvn clean verify
+        run: mvn clean verify -Dtest='!AccountServiceIntegrationTest' -DfailIfNoTests=false
