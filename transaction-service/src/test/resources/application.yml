@@ -10,8 +10,8 @@ spring:
   cloud:
     discovery:
       enabled: false
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
 
 eureka:
   client:
