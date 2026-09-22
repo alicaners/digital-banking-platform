@@ -1,5 +1,7 @@
 # Digital Banking Platform
 
+![CI Status](https://github.com/alicaners/digital-banking-platform/actions/workflows/ci.yml/badge.svg)
+
 Spring Boot ve Spring Cloud ile geliştirilmiş mikroservis mimarili
 dijital bankacılık platformu simülasyonu.
 
@@ -43,9 +45,21 @@ graph TD
 | transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Saga Pattern, Circuit Breaker, Retry |
 | notification-service | ✅ Tamamlandı | 8085 | Kafka ile asenkron bildirim |
 
-## Çalıştırma Sırası
+## Çalıştırma
 
-1. Docker altyapısını başlat: `docker compose up -d`
+**En kolay yol — Docker Compose ile tüm sistemi tek komutla ayağa kaldırmak:**
+
+```bash
+docker compose up -d
+```
+
+Bu komut, altyapıyı (PostgreSQL, Kafka, Zookeeper, Redis) ve yedi
+mikroservisi hep birlikte, doğru sırayla başlatır — IntelliJ veya
+Maven kurmaya gerek kalmadan.
+
+**Alternatif — Her servisi elle, IntelliJ/terminal üzerinden çalıştırmak:**
+
+1. Docker altyapısını başlat: `docker compose up -d` (sadece postgres, kafka, redis, zookeeper için de kullanılabilir)
 2. Eureka Server'ı başlat: `cd eureka-server && mvnw spring-boot:run`
 3. API Gateway'i başlat: `cd api-gateway && mvnw spring-boot:run`
 4. Auth Service'i başlat: `cd auth-service && mvnw spring-boot:run`
@@ -101,18 +115,31 @@ Aşama 3'te tespit edilip Aşama 4'te çözülmüştür
 
 (bkz. docs/asama6-notlar.md)
 
+## DevOps
+
+- **Docker**: Her servis, multi-stage build ile optimize edilmiş
+  (165-206MB) bağımsız bir image olarak build edilebiliyor.
+- **Docker Compose**: Tüm sistem (11 container — 4 altyapı + 7
+  uygulama), tek bir `docker compose up -d` komutuyla, ortak bir
+  Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
+- **GitHub Actions (CI)**: Her push'ta, yedi servisin her biri ayrı
+  ayrı otomatik olarak derlenip test ediliyor (bkz. yukarıdaki badge).
+
+(bkz. docs/asama7-notlar.md)
+
 ## Teknolojiler
 
 Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
-Kafka, Redis, Docker, JWT (jjwt), OpenFeign, Resilience4j, Spring Retry,
-JUnit 5, Mockito, Testcontainers, Springdoc OpenAPI
+Kafka, Redis, Docker, Docker Compose, GitHub Actions, JWT (jjwt),
+OpenFeign, Resilience4j, Spring Retry, JUnit 5, Mockito, Testcontainers,
+Springdoc OpenAPI
 
 ## Durum
 
-✅ Temel mimari, dayanıklılık katmanı ve test/dokümantasyon
-altyapısı tamamlandı — 7 mikroservis, Eureka service discovery,
-Gateway üzerinden merkezi JWT doğrulama ve rate limiting, senkron
-(Feign) ve asenkron (Kafka) servisler arası iletişim, Saga Pattern
-ile distributed transaction yönetimi, Circuit Breaker/Retry ile hata
-toleransı, Redis ile performans optimizasyonu, otomatik testler ve
-merkezi API dokümantasyonu.
+✅ Proje tamamlandı — 7 mikroservis, Eureka service discovery, Gateway
+üzerinden merkezi JWT doğrulama ve rate limiting, senkron (Feign) ve
+asenkron (Kafka) servisler arası iletişim, Saga Pattern ile distributed
+transaction yönetimi, Circuit Breaker/Retry ile hata toleransı, Redis
+ile performans optimizasyonu, otomatik testler (Unit + Integration),
+merkezi API dokümantasyonu (Swagger), Docker ile tam konteynerleştirme
+ve GitHub Actions ile sürekli entegrasyon (CI).
