@@ -2,14 +2,17 @@ package com.banking.account.service;
 
 import com.banking.account.dto.AccountRequest;
 import com.banking.account.dto.AccountResponse;
+import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.entity.Account;
 import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -96,6 +99,50 @@ public class AccountService {
         accountRepository.save(account);
 
         return toResponse(account);
+    }
+
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "accounts", key = "#request.senderAccountId"),
+            @CacheEvict(value = "accounts", key = "#request.receiverAccountId")
+    })
+    public AccountResponse transfer(InternalTransferRequest request, Long userId) {
+
+        if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Transfer miktarı sıfırdan büyük olmalı");
+        }
+
+        Account sender = accountRepository.findById(request.getSenderAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Gönderen hesap bulunamadı"));
+
+        checkWriteAccess(sender, userId);
+
+        Account receiver = accountRepository.findById(request.getReceiverAccountId())
+                .orElseThrow(() -> new IllegalArgumentException("Alıcı hesap bulunamadı"));
+
+        if (!"ACTIVE".equals(sender.getStatus())) {
+            throw new IllegalArgumentException("Gönderen hesap aktif değil");
+        }
+
+        if (!"ACTIVE".equals(receiver.getStatus())) {
+            throw new IllegalArgumentException("Alıcı hesap aktif değil");
+        }
+
+        if (!sender.getCurrency().equals(receiver.getCurrency())) {
+            throw new IllegalArgumentException("Gönderen ve alıcı hesapların para birimleri farklı");
+        }
+
+        if (sender.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new IllegalArgumentException("Yetersiz bakiye");
+        }
+
+        sender.setBalance(sender.getBalance().subtract(request.getAmount()));
+        receiver.setBalance(receiver.getBalance().add(request.getAmount()));
+
+        accountRepository.save(sender);
+        accountRepository.save(receiver);
+
+        return toResponse(sender);
     }
 
     private void checkReadAccess(Account account, Long userId, String role) {

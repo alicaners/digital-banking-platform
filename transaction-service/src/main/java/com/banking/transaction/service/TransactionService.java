@@ -1,22 +1,25 @@
 package com.banking.transaction.service;
 
 import com.banking.transaction.client.AccountServiceClient;
-import com.banking.transaction.dto.AmountRequest;
+import com.banking.transaction.dto.AccountResponse;
+import com.banking.transaction.dto.InternalTransferRequest;
 import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
-import com.banking.transaction.repository.TransactionRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import feign.FeignException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Map;
 import com.banking.transaction.event.TransactionEvent;
+import com.banking.transaction.exception.NonRetryableException;
+import com.banking.transaction.executor.AccountServiceExecutor;
 import com.banking.transaction.kafka.TransactionEventProducer;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
-import java.net.ConnectException;
-import com.banking.transaction.dto.AccountResponse;
+import com.banking.transaction.repository.TransactionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class TransactionService {
@@ -28,26 +31,36 @@ public class TransactionService {
     private AccountServiceClient accountServiceClient;
 
     @Autowired
+    private AccountServiceExecutor accountServiceExecutor;
+
+    @Autowired
     private TransactionEventProducer eventProducer;
 
-    public TransactionResponse transfer(TransferRequest request, Long userId) {
+    public TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey) {
+
+        Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return toResponse(existing.get());
+        }
 
         Transaction transaction = new Transaction();
         transaction.setSenderAccountId(request.getSenderAccountId());
         transaction.setReceiverAccountId(request.getReceiverAccountId());
         transaction.setAmount(request.getAmount());
+        transaction.setIdempotencyKey(idempotencyKey);
 
-        boolean withdrawSucceeded = false;
         String failureReason = null;
 
         try {
-            withdrawWithRetry(request.getSenderAccountId(), new AmountRequest(request.getAmount()), userId);
-            withdrawSucceeded = true;
-
-            accountServiceClient.deposit(
+            InternalTransferRequest transferRequest = new InternalTransferRequest(
+                    request.getSenderAccountId(),
                     request.getReceiverAccountId(),
-                    new AmountRequest(request.getAmount()),
-                    userId
+                    request.getAmount(),
+                    idempotencyKey
+            );
+
+            accountServiceExecutor.execute(
+                    () -> accountServiceClient.transfer(transferRequest, userId)
             );
 
             transaction.setStatus("COMPLETED");
@@ -55,40 +68,40 @@ public class TransactionService {
         } catch (FeignException e) {
 
             failureReason = extractErrorMessage(e);
+            transaction.setStatus("FAILED");
 
-            if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request, userId);
-                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
-            } else {
-                transaction.setStatus("FAILED");
-            }
+        } catch (NonRetryableException e) {
+
+            failureReason = (e.getCause() instanceof FeignException fe)
+                    ? extractErrorMessage(fe)
+                    : e.getMessage();
+            transaction.setStatus("FAILED");
+
+        } catch (CallNotPermittedException e) {
+
+            failureReason = "Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin";
+            transaction.setStatus("FAILED");
 
         } catch (RuntimeException e) {
 
             failureReason = (e.getMessage() != null)
                     ? e.getMessage()
                     : "Hesap servisi şu anda kullanılamıyor";
-
-            if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request, userId);
-                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
-            } else {
-                transaction.setStatus("FAILED");
-            }
+            transaction.setStatus("FAILED");
 
         } catch (Exception e) {
 
             failureReason = "Beklenmeyen bir hata oluştu: " + e.getMessage();
-
-            if (withdrawSucceeded) {
-                boolean compensationSucceeded = compensate(request, userId);
-                transaction.setStatus(compensationSucceeded ? "REVERSED" : "FAILED");
-            } else {
-                transaction.setStatus("FAILED");
-            }
+            transaction.setStatus("FAILED");
         }
 
-        transactionRepository.save(transaction);
+        try {
+            transactionRepository.save(transaction);
+        } catch (DataIntegrityViolationException e) {
+            return transactionRepository.findByIdempotencyKey(idempotencyKey)
+                    .map(this::toResponse)
+                    .orElseThrow(() -> e);
+        }
 
         eventProducer.publish(new TransactionEvent(
                 transaction.getId(),
@@ -103,28 +116,6 @@ public class TransactionService {
             response.setFailureReason(failureReason);
         }
         return response;
-    }
-
-    @Retryable(
-            retryFor = {ConnectException.class, java.io.IOException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 500)
-    )
-    public AccountResponse withdrawWithRetry(Long accountId, AmountRequest request, Long userId) {
-        return accountServiceClient.withdraw(accountId, request, userId);
-    }
-
-    private boolean compensate(TransferRequest request, Long userId) {
-        try {
-            accountServiceClient.deposit(
-                    request.getSenderAccountId(),
-                    new AmountRequest(request.getAmount()),
-                    userId
-            );
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private String extractErrorMessage(FeignException e) {
@@ -144,6 +135,8 @@ public class TransactionService {
 
         if (e.status() == 404) {
             return "Hesap bulunamadı";
+        } else if (e.status() == 403) {
+            return "Bu hesap üzerinde işlem yapma yetkiniz yok";
         } else if (e.status() >= 500) {
             return "Hesap servisi şu anda yanıt vermiyor";
         } else {

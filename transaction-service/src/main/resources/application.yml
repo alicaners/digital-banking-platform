@@ -23,7 +23,7 @@ spring:
   cloud:
     openfeign:
       circuitbreaker:
-        enabled: true
+        enabled: false
 
 eureka:
   client:
@@ -34,7 +34,7 @@ eureka:
 
 feign:
   circuitbreaker:
-    enabled: true
+    enabled: false
 
 resilience4j:
   circuitbreaker:

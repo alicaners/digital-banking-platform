@@ -2,11 +2,12 @@ package com.banking.transaction.service;
 
 import com.banking.transaction.client.AccountServiceClient;
 import com.banking.transaction.dto.AccountResponse;
-import com.banking.transaction.dto.AmountRequest;
+import com.banking.transaction.dto.InternalTransferRequest;
 import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
 import com.banking.transaction.event.TransactionEvent;
+import com.banking.transaction.executor.AccountServiceExecutor;
 import com.banking.transaction.kafka.TransactionEventProducer;
 import com.banking.transaction.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -31,6 +35,9 @@ class TransactionServiceTest {
     private AccountServiceClient accountServiceClient;
 
     @Mock
+    private AccountServiceExecutor accountServiceExecutor;
+
+    @Mock
     private TransactionEventProducer eventProducer;
 
     @InjectMocks
@@ -38,6 +45,7 @@ class TransactionServiceTest {
 
     private TransferRequest transferRequest;
     private static final Long TEST_USER_ID = 1L;
+    private static final String TEST_IDEMPOTENCY_KEY = "test-idempotency-key-123";
 
     @BeforeEach
     void setUp() {
@@ -46,19 +54,28 @@ class TransactionServiceTest {
         transferRequest.setReceiverAccountId(2L);
         transferRequest.setAmount(new BigDecimal("100.00"));
 
-        when(transactionRepository.save(any(Transaction.class)))
+        lenient().when(transactionRepository.save(any(Transaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // AccountServiceExecutor'ı, kendisine verilen Supplier'ı gerçekten çalıştıran
+        // bir "pass-through" mock haline getiriyoruz. Böylece testler, retry/circuit breaker
+        // mantığını değil, TransactionService'in kendi davranışını doğruluyor.
+        lenient().when(accountServiceExecutor.execute(any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> supplier = invocation.getArgument(0);
+                    return supplier.get();
+                });
     }
 
     @Test
-    void transfer_bothStepsSucceed_returnsCompletedStatus() {
+    void transfer_success_returnsCompletedStatus() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
+        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
 
-        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
         assertEquals("COMPLETED", response.getStatus());
         assertNull(response.getFailureReason());
@@ -66,47 +83,58 @@ class TransactionServiceTest {
     }
 
     @Test
-    void transfer_withdrawFails_returnsFailedStatusAndNeverAttemptsDeposit() {
+    void transfer_accountServiceThrowsRuntimeException_returnsFailedStatus() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
+        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Yetersiz bakiye"));
 
-        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
         assertEquals("FAILED", response.getStatus());
         assertEquals("Yetersiz bakiye", response.getFailureReason());
-        verify(accountServiceClient, never()).deposit(anyLong(), any(AmountRequest.class), anyLong());
     }
 
     @Test
-    void transfer_depositFailsButCompensationSucceeds_returnsReversedStatus() {
+    void transfer_sendsCorrectInternalTransferRequest() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenThrow(new RuntimeException("Hesap bulunamadı"));
-        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
+        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
 
-        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
+        transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("REVERSED", response.getStatus());
-        assertEquals("Hesap bulunamadı", response.getFailureReason());
-        verify(accountServiceClient, times(1)).deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID));
+        verify(accountServiceClient).transfer(argThat(req ->
+                req.getSenderAccountId().equals(1L) &&
+                        req.getReceiverAccountId().equals(2L) &&
+                        req.getAmount().compareTo(new BigDecimal("100.00")) == 0 &&
+                        TEST_IDEMPOTENCY_KEY.equals(req.getIdempotencyKey())
+        ), eq(TEST_USER_ID));
     }
 
     @Test
-    void transfer_depositAndCompensationBothFail_returnsFailedStatus() {
+    void transfer_existingIdempotencyKey_returnsCachedResultWithoutCallingAccountService() {
 
-        when(accountServiceClient.withdraw(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenReturn(new AccountResponse());
-        when(accountServiceClient.deposit(eq(2L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenThrow(new RuntimeException("Hesap bulunamadı"));
-        when(accountServiceClient.deposit(eq(1L), any(AmountRequest.class), eq(TEST_USER_ID)))
-                .thenThrow(new RuntimeException("Hesap servisi kapalı"));
+        Transaction existing = new Transaction();
+        existing.setId(99L);
+        existing.setSenderAccountId(1L);
+        existing.setReceiverAccountId(2L);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setStatus("COMPLETED");
+        existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existing.setCreatedAt(LocalDateTime.now());
 
-        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID);
+        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+                .thenReturn(Optional.of(existing));
 
-        assertEquals("FAILED", response.getStatus());
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(99L, response.getId());
+        verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+        verify(transactionRepository, never()).save(any(Transaction.class));
+        verify(eventProducer, never()).publish(any(TransactionEvent.class));
     }
 }

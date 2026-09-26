@@ -10,6 +10,10 @@ mvnw spring-boot:run
 
 ## Endpoint'ler (Gateway üzerinden JWT token gerektirir)
 POST /api/transactions/transfer - İki hesap arasında transfer yapar
+- Header: Idempotency-Key (zorunlu) - istemci tarafından üretilen,
+  her transfer denemesi için benzersiz bir anahtar. Aynı key ile
+  tekrar gönderilen istek, yeni bir transfer yapmadan önceki
+  sonucu döndürür (bkz. "Idempotency" bölümü).
 
 ## Veritabanı
 PostgreSQL - transaction_db
@@ -18,30 +22,55 @@ PostgreSQL - transaction_db
 Account Service'e Feign Client (AccountServiceClient) üzerinden
 senkron HTTP çağrıları yapılır.
 
-## Distributed Transaction Yönetimi (Saga Pattern)
-Transfer sırasında gönderen hesaptan para düşürüldükten sonra alıcı
-hesaba eklenirken bir hata oluşursa, sistem otomatik olarak parayı
-gönderen hesaba geri iade eder (compensating transaction). İşlem
-durumları:
-- COMPLETED: her iki adım da başarılı
-- FAILED: withdraw'ın kendisi başarısız oldu (para hiç hareket etmedi)
-- REVERSED: withdraw başarılı oldu ama deposit başarısız oldu,
-  telafi (geri yatırma) başarıyla yapıldı
+## Atomic Transfer (Aşama 8'de basitleştirildi)
+Transfer işlemi artık Account Service içinde tek bir `@Transactional`
+veritabanı işlemi olarak gerçekleşiyor - sender ve receiver hesapları
+aynı veritabanında (account_db) olduğu için, para düşüşü ve artışı
+ya birlikte başarılı olur ya da hiçbiri gerçekleşmez; bu veritabanının
+kendi ACID garantisiyle sağlanıyor.
 
-Bu, Aşama 3'te tespit edilip Aşama 4'te çözülen bir sorundur
-(bkz. docs/asama3-notlar.md ve docs/asama4-notlar.md).
+Bu, önceden (Aşama 4) bir Saga/compensating-transaction pattern'iyle
+(withdraw + deposit + hata durumunda geri iade) çözülüyordu. Sender ve
+receiver aynı veritabanında olduğu için Saga'ya gerek olmadığı
+belirlendi ve tasarım basitleştirildi (bkz. docs/asama8-notlar.md,
+"Gün 2 — Konu A"). Saga pattern, gerçek dünyada farklı veritabanlarına/
+servislere yayılmış işlemler için hâlâ geçerli bir çözümdür - bizim
+senaryomuzda böyle bir dağıtıklık olmadığı için kaldırıldı.
+
+İşlem durumları artık sadece:
+- COMPLETED: transfer başarıyla gerçekleşti
+- FAILED: transfer gerçekleşmedi (yetersiz bakiye, yetkisiz erişim,
+  hesap bulunamadı, Account Service'e ulaşılamadı vb.)
+
+## Idempotency
+Her transfer isteği, istemcinin ürettiği bir `Idempotency-Key` header'ı
+taşımak zorundadır. Bu key veritabanında (`transactions.idempotency_key`,
+unique) saklanır. Aynı key ile gelen bir istek tekrar işlenmez, ilk
+denemenin sonucu doğrudan döndürülür - bu, ağ hatası/timeout sonrası
+istemcinin isteği güvenle tekrar gönderebilmesini sağlar
+(bkz. docs/asama8-notlar.md, "Gün 2 — Konu B").
 
 ## Dayanıklılık (Resilience)
-Account Service çağrısı Circuit Breaker (Resilience4j) ile korunur —
-Account Service çökerse, sistem gereksiz yere beklemeden hızlı bir
-fallback cevabı döner. Geçici bağlantı hatalarında (ConnectException,
-IOException) @Retryable ile otomatik olarak en fazla 3 kez tekrar
-deneme yapılır (bkz. docs/asama5-notlar.md).
+Account Service çağrısı, `AccountServiceExecutor` üzerinden Circuit
+Breaker (Resilience4j, açıkça `accountService` adıyla) ve Retry
+(Spring Retry, programatik `RetryTemplate`) ile korunur:
+- Circuit `OPEN` durumdayken (Account Service çok fazla art arda hata
+  verdiğinde) çağrı hiç yapılmadan hızlıca reddedilir.
+- Sadece geçici (5xx/bağlantı) hatalar en fazla 3 kez, 500ms arayla
+  tekrar denenir. İş kuralı hataları (400/403/404 gibi 4xx) hiç tekrar
+  denenmez, çünkü sonuç değişmeyecektir.
+
+Aşama 5'te eklenen `@Retryable` kullanımı, self-invocation (AOP proxy)
+kısıtlaması nedeniyle aslında hiç tetiklenmiyordu; Aşama 8'de programatik
+`RetryTemplate`'e geçilerek bu sorun kökten çözüldü. Aynı şekilde,
+Feign'in otomatik circuit breaker'ının ürettiği isim, `application.yml`
+config'iyle eşleşmiyordu (bkz. docs/asama8-notlar.md, "Gün 2 — Konu B").
 
 ## Test
-Unit testler (Mockito) ile transfer() metodunun dört Saga senaryosu
-(COMPLETED, FAILED, REVERSED, telafi başarısız) kapsanmıştır
-(bkz. docs/asama6-notlar.md).
+Unit testler (Mockito), yeni sadeleştirilmiş transfer akışını
+(başarı, hata, doğru request'in gönderilmesi, idempotency-key ile
+tekrar gönderilen isteğin cache'lenmiş sonucu döndürmesi) kapsar
+(bkz. docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
 http://localhost:8084/swagger-ui.html

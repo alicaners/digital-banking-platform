@@ -99,3 +99,109 @@ erişilmeye çalışıldığında (`GET /api/accounts/1`), sistem doğru şekild
 `403 Forbidden - "Bu hesaba erişim yetkiniz yok"` döndürdü. Kullanıcı 1'in
 kendi isteği (`GET /api/customers`) ise doğru şekilde sadece kendi kaydını
 listeledi, sistemdeki tüm müşterileri değil.
+
+
+## Gün 2 — Konu A: Atomic Transfer (Saga Pattern'in Basitleştirilmesi)
+
+Transaction Service, önceden bir Saga/compensation pattern'i ile transfer
+yapıyordu: önce sender hesabından `withdraw` (Feign ile Account Service'e
+istek), başarılıysa receiver hesabına `deposit`. Deposit başarısız olursa,
+`withdraw`'ı geri almak için bir "compensating transaction" (`REVERSED`
+durumu) tetikleniyordu.
+
+**Bu, gereksiz bir karmaşıklıktı ve basitleştirildi.** Saga pattern'i,
+gerçek dünyada farklı veritabanlarına/servislere yayılmış işlemler için
+var olan bir çözümdür - çünkü tek bir veritabanı transaction'ı ile atomiklik
+garanti edilemediği durumlarda, "önce yap, olmazsa telafi et" mantığına
+ihtiyaç duyulur. Ama bizim projemizde sender ve receiver hesapları **aynı
+veritabanında** (`account_db`) duruyor. Bu durumda Saga kurmak, veritabanının
+zaten bedava sunduğu bir garantiyi (tek bir `@Transactional` bloğunun ACID
+atomikliği) elle ve hataya açık bir şekilde yeniden inşa etmek anlamına
+geliyordu.
+
+**Yapılan değişiklik**: Account Service'e yeni bir `transfer()` metodu
+eklendi (`@Transactional`), hem düşüş hem artış tek bir veritabanı
+transaction'ı içinde gerçekleşiyor - ya ikisi birden olur, ya hiçbiri
+olmaz, bunu veritabanı seviyesinde garanti ediyoruz. Transaction Service
+artık sadece bu tek endpoint'i (`POST /api/accounts/internal/transfer`)
+çağırıyor, kendi başına withdraw/deposit orkestrasyonu yapmıyor.
+`withdrawWithRetry`, `compensate`, `REVERSED` durumu kaldırıldı.
+
+**Saga ne zaman hâlâ anlamlı olurdu**: Hesaplar farklı veritabanlarına/
+servislere bölünseydi (örn. yurt dışı transferlerde farklı bir banka
+sistemine gidiliyorsa), ya da bir adımın (örn. bildirim gönderimi) hatası
+transferin kendisini geri almamalıysa - o zaman gerçek bir Saga/compensation
+mekanizmasına ihtiyaç olurdu. Bizim senaryomuzda böyle bir dağıtıklık yok.
+
+**Test ile doğrulandı**: İki hesap arasında 100 birimlik bir transfer
+yapıldı, işlem sonrası iki hesabın toplam bakiyesi değişmeden (500,
+400/100 olarak) korundu - atomiklik doğrulandı.
+
+## Gün 2 — Konu B: Idempotency + Retry/Circuit Breaker Düzeltmeleri
+
+Review'da tespit edilen iki teknik borç giderildi:
+
+1. **Circuit Breaker yanlış isimlendirilmişti (review madde #8)**: Feign'in
+   otomatik circuit breaker entegrasyonu (`spring.cloud.openfeign.circuitbreaker.enabled=true`),
+   her Feign metodu için kendi ürettiği bir isimle breaker açıyordu - bu
+   isim, `application.yml`'de elle tanımladığımız `accountService`
+   config'iyle hiçbir zaman eşleşmiyordu. Sonuç: yazdığımız circuit
+   breaker ayarları (failure threshold, wait duration vb.) sessizce hiç
+   uygulanmıyordu.
+
+2. **`@Retryable` self-invocation bug'ı (Aşama 6'dan kalma bilinen sorun)**:
+   Spring'in `@Retryable` annotation'ı AOP proxy'ye dayanıyor - bir metod
+   kendi sınıfı içinden çağrıldığında proxy devreye girmiyor, retry hiç
+   tetiklenmiyordu.
+
+3. **Idempotency koruması yoktu**: Aynı transfer isteği (örn. istemci
+   timeout sonrası veya ağ hatası nedeniyle) iki kez gönderilirse, para
+   iki kez transfer edilebilirdi.
+
+**Yapılan değişiklikler:**
+
+1. `Transaction` entity'sine `idempotencyKey` alanı eklendi (`unique`,
+   `not null`). `TransactionController`, istemciden `Idempotency-Key`
+   header'ını zorunlu istiyor - bu key **istemci tarafından üretiliyor**,
+   sunucu tarafından değil, çünkü idempotency'nin amacı istemcinin "bu
+   isteği daha önce gönderdim mi" diye sorabilmesidir.
+
+2. `TransactionService.transfer()`, işleme başlamadan önce
+   `findByIdempotencyKey` ile kontrol ediyor - kayıt varsa, hiçbir işlem
+   yapmadan eski sonucu döndürüyor. Eş zamanlı (concurrent) aynı-key
+   istekleri için, veritabanının `unique` constraint'i son güvenlik ağı
+   olarak devrede (`DataIntegrityViolationException` yakalanıp mevcut
+   kayıt döndürülüyor).
+
+3. Yeni bir `AccountServiceExecutor` sınıfı yazıldı:
+   programatik `RetryTemplate` (Spring Retry) + Spring Cloud'un
+   `CircuitBreakerFactory`'si (açıkça `"accountService"` adıyla) birlikte
+   kullanılıyor. `RetryTemplate` bir proxy/annotation mekanizmasına değil
+   doğrudan çağrılan bir nesneye dayandığı için, önceki self-invocation
+   bug'ı kökten ortadan kalktı.
+
+4. Retry mantığı seçici: sadece 5xx/bağlantı hataları tekrar deneniyor
+   (`.retryOn(FeignException.class)`), 4xx iş kuralı hataları (yetersiz
+   bakiye, yetkisiz vb.) `NonRetryableException`'a sarılıp hiç tekrar
+   denenmiyor - çünkü bu tür hatalar tekrar denense de sonuç değişmez.
+
+5. Feign'in otomatik circuit breaker'ı (`feign.circuitbreaker.enabled`,
+   `spring.cloud.openfeign.circuitbreaker.enabled`) kapatıldı, tek
+   sorumluluk artık `AccountServiceExecutor`'da. `AccountServiceClient`'tan
+   `fallback` attribute'u ve `AccountServiceClientFallback` sınıfı
+   kaldırıldı.
+
+**Karşılaşılan sorun**: `idempotencyKey` alanı `NOT NULL` + `UNIQUE`
+olarak eklendiğinde, `transactions` tablosunda Gün 2 Konu A'dan kalma
+eski test satırları olduğu için Hibernate'in `ddl-auto: update` mekanizması
+bu kolonu ekleyemedi (var olan satırlar bu alanı boş bırakacağı için
+constraint ihlali oluşuyordu). Tablo test verisi olduğu için `TRUNCATE
+TABLE transactions` ile temizlenip servis yeniden başlatıldı, kolon
+temiz tabloya sorunsuz eklendi.
+
+**Test ile doğrulandı**: Aynı `Idempotency-Key` (`test-key-001`) ile iki
+kez transfer isteği gönderildi. İlk istek `COMPLETED` durumuyla transferi
+gerçekleştirdi (sender 500→450, receiver 0→50). İkinci istek, tamamen
+aynı `id` ve `createdAt` değerleriyle (yani transferi tekrar çalıştırmadan)
+aynı sonucu döndürdü; bakiyeler ikinci istekten sonra da değişmeden kaldı
+(450/50) - idempotency doğrulandı.

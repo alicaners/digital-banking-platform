@@ -22,7 +22,8 @@ public class TransactionController {
     @PostMapping("/transfer")
     public ResponseEntity<TransactionResponse> transfer(
             @Valid @RequestBody TransferRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(transactionService.transfer(request, userId));
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        return ResponseEntity.ok(transactionService.transfer(request, userId, idempotencyKey));
     }
 }

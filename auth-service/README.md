@@ -19,21 +19,27 @@ PostgreSQL - auth_db
 
 ## Güvenlik
 Şifreler BCrypt ile hash'lenerek saklanır. Giriş sonrası dönen JWT
-token, Gateway seviyesinde doğrulanarak korumalı endpoint'lere erişim
-kontrolü sağlanır.
+token, artık sadece username değil, `userId` ve `role` bilgilerini de
+custom claim olarak taşır. Gateway, token'ı doğruladıktan sonra bu
+bilgileri `X-User-Id`/`X-User-Role` header'larıyla downstream
+servislere iletir - bu, her servisin kendi ownership/yetkilendirme
+kontrolünü yapabilmesini sağlar (bkz. docs/asama8-notlar.md,
+"Gün 1 — Konu B").
 
 ## Güvenlik Notu
 
-Bu proje eğitim amaçlıdır, `application.yml` içinde `jwt.secret` gibi
-değerler için varsayılanlar bulunur. Gerçek bir prodüksiyon ortamında
-bu tür hassas değerler asla kod içine yazılmamalı; ortam değişkeni
-(bkz. proje kökündeki `.env.example`) ya da bir secret management
-servisi (HashiCorp Vault, AWS Secrets Manager vb.) üzerinden
-yönetilmelidir.
+Aşama 8'de giderildi: `jwt.secret` için kod içinde bir varsayılan
+değer artık **yok**. `application.yml`'de `${JWT_SECRET}` (varsayılansız)
+kullanılıyor - gerçek bir `.env` dosyası (bkz. proje kökündeki
+`.env.example`) olmadan uygulama hiç başlamıyor. Bu, önceki bir
+incelemede (code review) tespit edilen kritik bir güvenlik açığıydı
+(bkz. docs/asama8-notlar.md, "Gün 1 — Konu A").
 
 ## Test
 Unit testler (Mockito) ile register ve login metodlarının tüm
-senaryoları kapsanmıştır (bkz. docs/asama6-notlar.md).
+senaryoları kapsanmıştır; token üretimi artık `userId`/`role`
+parametreleriyle doğrulanır (bkz. docs/asama6-notlar.md,
+docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
 http://localhost:8081/swagger-ui.html
