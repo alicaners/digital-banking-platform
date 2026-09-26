@@ -10,6 +10,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    env:
+      JWT_SECRET: test-ortami-icin-en-az-32-karakterlik-guvenli-bir-secret-degeri
+
     strategy:
       matrix:
         service:
