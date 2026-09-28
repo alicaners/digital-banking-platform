@@ -38,12 +38,13 @@ public class TransactionService {
 
     public TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey) {
 
-        Optional<Transaction> existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
+        Optional<Transaction> existing = transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId);
         if (existing.isPresent()) {
             return toResponse(existing.get());
         }
 
         Transaction transaction = new Transaction();
+        transaction.setUserId(userId);
         transaction.setSenderAccountId(request.getSenderAccountId());
         transaction.setReceiverAccountId(request.getReceiverAccountId());
         transaction.setAmount(request.getAmount());
@@ -98,7 +99,7 @@ public class TransactionService {
         try {
             transactionRepository.save(transaction);
         } catch (DataIntegrityViolationException e) {
-            return transactionRepository.findByIdempotencyKey(idempotencyKey)
+            return transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId)
                     .map(this::toResponse)
                     .orElseThrow(() -> e);
         }

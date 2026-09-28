@@ -45,6 +45,7 @@ class TransactionServiceTest {
 
     private TransferRequest transferRequest;
     private static final Long TEST_USER_ID = 1L;
+    private static final Long OTHER_USER_ID = 2L;
     private static final String TEST_IDEMPOTENCY_KEY = "test-idempotency-key-123";
 
     @BeforeEach
@@ -57,9 +58,6 @@ class TransactionServiceTest {
         lenient().when(transactionRepository.save(any(Transaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // AccountServiceExecutor'ı, kendisine verilen Supplier'ı gerçekten çalıştıran
-        // bir "pass-through" mock haline getiriyoruz. Böylece testler, retry/circuit breaker
-        // mantığını değil, TransactionService'in kendi davranışını doğruluyor.
         lenient().when(accountServiceExecutor.execute(any()))
                 .thenAnswer(invocation -> {
                     Supplier<?> supplier = invocation.getArgument(0);
@@ -70,7 +68,7 @@ class TransactionServiceTest {
     @Test
     void transfer_success_returnsCompletedStatus() {
 
-        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
                 .thenReturn(Optional.empty());
         when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
@@ -85,7 +83,7 @@ class TransactionServiceTest {
     @Test
     void transfer_accountServiceThrowsRuntimeException_returnsFailedStatus() {
 
-        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
                 .thenReturn(Optional.empty());
         when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenThrow(new RuntimeException("Yetersiz bakiye"));
@@ -99,7 +97,7 @@ class TransactionServiceTest {
     @Test
     void transfer_sendsCorrectInternalTransferRequest() {
 
-        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
                 .thenReturn(Optional.empty());
         when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
                 .thenReturn(new AccountResponse());
@@ -119,6 +117,7 @@ class TransactionServiceTest {
 
         Transaction existing = new Transaction();
         existing.setId(99L);
+        existing.setUserId(TEST_USER_ID);
         existing.setSenderAccountId(1L);
         existing.setReceiverAccountId(2L);
         existing.setAmount(new BigDecimal("100.00"));
@@ -126,7 +125,7 @@ class TransactionServiceTest {
         existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
         existing.setCreatedAt(LocalDateTime.now());
 
-        when(transactionRepository.findByIdempotencyKey(TEST_IDEMPOTENCY_KEY))
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
                 .thenReturn(Optional.of(existing));
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
@@ -136,5 +135,33 @@ class TransactionServiceTest {
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
         verify(transactionRepository, never()).save(any(Transaction.class));
         verify(eventProducer, never()).publish(any(TransactionEvent.class));
+    }
+
+    @Test
+    void transfer_sameKeyDifferentUser_doesNotReturnOtherUsersTransaction() {
+
+        // TEST_USER_ID daha önce bu key ile bir transfer yapmış (cache'te var).
+        Transaction existingForTestUser = new Transaction();
+        existingForTestUser.setId(99L);
+        existingForTestUser.setUserId(TEST_USER_ID);
+        existingForTestUser.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existingForTestUser.setStatus("COMPLETED");
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.of(existingForTestUser));
+
+        // OTHER_USER_ID aynı key'i kullanıyor ama kendi kaydı yok - boş dönmeli.
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, OTHER_USER_ID))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(OTHER_USER_ID)))
+                .thenReturn(new AccountResponse());
+
+        TransactionResponse response = transactionService.transfer(transferRequest, OTHER_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        // OTHER_USER_ID, TEST_USER_ID'nin eski kaydını (id=99) GÖRMEMELİ,
+        // kendi yeni transferini gerçekleştirmeli.
+        assertNotEquals(99L, response.getId());
+        assertEquals("COMPLETED", response.getStatus());
+        verify(accountServiceClient, times(1)).transfer(any(InternalTransferRequest.class), eq(OTHER_USER_ID));
     }
 }

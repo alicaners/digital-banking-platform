@@ -7,5 +7,5 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
+    Optional<Transaction> findByIdempotencyKeyAndUserId(String idempotencyKey, Long userId);
 }
