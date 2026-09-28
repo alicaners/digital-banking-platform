@@ -7,6 +7,7 @@ import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
 import com.banking.transaction.event.TransactionEvent;
+import com.banking.transaction.exception.IdempotencyConflictException;
 import com.banking.transaction.exception.NonRetryableException;
 import com.banking.transaction.executor.AccountServiceExecutor;
 import com.banking.transaction.kafka.TransactionEventProducer;
@@ -40,7 +41,13 @@ public class TransactionService {
 
         Optional<Transaction> existing = transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            Transaction existingTransaction = existing.get();
+            if (!matchesRequest(existingTransaction, request)) {
+                throw new IdempotencyConflictException(
+                        "Bu Idempotency-Key daha once farkli bir islem icin kullanilmis, ayni key ile farkli bir transfer yapamazsiniz"
+                );
+            }
+            return toResponse(existingTransaction);
         }
 
         Transaction transaction = new Transaction();
@@ -99,9 +106,14 @@ public class TransactionService {
         try {
             transactionRepository.save(transaction);
         } catch (DataIntegrityViolationException e) {
-            return transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId)
-                    .map(this::toResponse)
+            Transaction raceWinner = transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId)
                     .orElseThrow(() -> e);
+            if (!matchesRequest(raceWinner, request)) {
+                throw new IdempotencyConflictException(
+                        "Bu Idempotency-Key daha once farklı bir işlem icin kullanılmış, aynı key ile farklı bir transfer yapamazsınız"
+                );
+            }
+            return toResponse(raceWinner);
         }
 
         eventProducer.publish(new TransactionEvent(
@@ -117,6 +129,12 @@ public class TransactionService {
             response.setFailureReason(failureReason);
         }
         return response;
+    }
+
+    private boolean matchesRequest(Transaction existing, TransferRequest request) {
+        return existing.getSenderAccountId().equals(request.getSenderAccountId())
+                && existing.getReceiverAccountId().equals(request.getReceiverAccountId())
+                && existing.getAmount().compareTo(request.getAmount()) == 0;
     }
 
     private String extractErrorMessage(FeignException e) {

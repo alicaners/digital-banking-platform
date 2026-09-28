@@ -7,6 +7,7 @@ import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
 import com.banking.transaction.event.TransactionEvent;
+import com.banking.transaction.exception.IdempotencyConflictException;
 import com.banking.transaction.executor.AccountServiceExecutor;
 import com.banking.transaction.kafka.TransactionEventProducer;
 import com.banking.transaction.repository.TransactionRepository;
@@ -140,17 +141,8 @@ class TransactionServiceTest {
     @Test
     void transfer_sameKeyDifferentUser_doesNotReturnOtherUsersTransaction() {
 
-        // TEST_USER_ID daha önce bu key ile bir transfer yapmış (cache'te var).
-        Transaction existingForTestUser = new Transaction();
-        existingForTestUser.setId(99L);
-        existingForTestUser.setUserId(TEST_USER_ID);
-        existingForTestUser.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
-        existingForTestUser.setStatus("COMPLETED");
-
-        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
-                .thenReturn(Optional.of(existingForTestUser));
-
-        // OTHER_USER_ID aynı key'i kullanıyor ama kendi kaydı yok - boş dönmeli.
+        // OTHER_USER_ID aynı key'i kullanıyor ama kendi kaydı yok - boş dönmeli,
+        // TEST_USER_ID'nin olası kaydını görmemeli.
         when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, OTHER_USER_ID))
                 .thenReturn(Optional.empty());
         when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(OTHER_USER_ID)))
@@ -163,5 +155,55 @@ class TransactionServiceTest {
         assertNotEquals(99L, response.getId());
         assertEquals("COMPLETED", response.getStatus());
         verify(accountServiceClient, times(1)).transfer(any(InternalTransferRequest.class), eq(OTHER_USER_ID));
+    }
+
+    @Test
+    void transfer_sameKeySameBody_returnsCachedResultWithoutConflict() {
+
+        // transferRequest ile BİREBİR aynı alanlara sahip bir kayıt.
+        Transaction existing = new Transaction();
+        existing.setId(99L);
+        existing.setUserId(TEST_USER_ID);
+        existing.setSenderAccountId(1L);
+        existing.setReceiverAccountId(2L);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setStatus("COMPLETED");
+        existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existing.setCreatedAt(LocalDateTime.now());
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.of(existing));
+
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals(99L, response.getId());
+        assertEquals("COMPLETED", response.getStatus());
+        verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+    }
+
+    @Test
+    void transfer_sameKeyDifferentBody_throwsConflictException() {
+
+        // transferRequest'in amount'u 100.00, ama kayıtlı transaction'ın amount'u farklı (50.00).
+        Transaction existing = new Transaction();
+        existing.setId(99L);
+        existing.setUserId(TEST_USER_ID);
+        existing.setSenderAccountId(1L);
+        existing.setReceiverAccountId(2L);
+        existing.setAmount(new BigDecimal("50.00"));
+        existing.setStatus("COMPLETED");
+        existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existing.setCreatedAt(LocalDateTime.now());
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IdempotencyConflictException.class, () ->
+                transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY)
+        );
+
+        verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+        verify(transactionRepository, never()).save(any(Transaction.class));
+        verify(eventProducer, never()).publish(any(TransactionEvent.class));
     }
 }
