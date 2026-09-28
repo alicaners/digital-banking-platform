@@ -61,8 +61,6 @@ public class TransactionService {
         transaction.setAmount(request.getAmount());
         transaction.setIdempotencyKey(idempotencyKey);
 
-        String failureReason = null;
-
         try {
             InternalTransferRequest transferRequest = new InternalTransferRequest(
                     request.getSenderAccountId(),
@@ -79,31 +77,35 @@ public class TransactionService {
 
         } catch (FeignException e) {
 
-            failureReason = extractErrorMessage(e);
+            transaction.setFailureReason(extractErrorMessage(e));
             transaction.setStatus("FAILED");
 
         } catch (NonRetryableException e) {
 
-            failureReason = (e.getCause() instanceof FeignException fe)
-                    ? extractErrorMessage(fe)
-                    : e.getMessage();
+            transaction.setFailureReason(
+                    (e.getCause() instanceof FeignException fe)
+                            ? extractErrorMessage(fe)
+                            : e.getMessage()
+            );
             transaction.setStatus("FAILED");
 
         } catch (CallNotPermittedException e) {
 
-            failureReason = "Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin";
+            transaction.setFailureReason("Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin");
             transaction.setStatus("FAILED");
 
         } catch (RuntimeException e) {
 
-            failureReason = (e.getMessage() != null)
-                    ? e.getMessage()
-                    : "Hesap servisi şu anda kullanılamıyor";
+            transaction.setFailureReason(
+                    (e.getMessage() != null)
+                            ? e.getMessage()
+                            : "Hesap servisi şu anda kullanılamıyor"
+            );
             transaction.setStatus("FAILED");
 
         } catch (Exception e) {
 
-            failureReason = "Beklenmeyen bir hata oluştu: " + e.getMessage();
+            transaction.setFailureReason("Beklenmeyen bir hata oluştu: " + e.getMessage());
             transaction.setStatus("FAILED");
         }
 
@@ -133,11 +135,7 @@ public class TransactionService {
                     transaction.getId(), e.getMessage());
         }
 
-        TransactionResponse response = toResponse(transaction);
-        if (failureReason != null) {
-            response.setFailureReason(failureReason);
-        }
-        return response;
+        return toResponse(transaction);
     }
 
     private boolean matchesRequest(Transaction existing, TransferRequest request) {
@@ -173,7 +171,7 @@ public class TransactionService {
     }
 
     private TransactionResponse toResponse(Transaction transaction) {
-        return new TransactionResponse(
+        TransactionResponse response = new TransactionResponse(
                 transaction.getId(),
                 transaction.getSenderAccountId(),
                 transaction.getReceiverAccountId(),
@@ -181,5 +179,7 @@ public class TransactionService {
                 transaction.getStatus(),
                 transaction.getCreatedAt()
         );
+        response.setFailureReason(transaction.getFailureReason());
+        return response;
     }
 }

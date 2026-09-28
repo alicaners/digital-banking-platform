@@ -223,4 +223,28 @@ class TransactionServiceTest {
         verify(transactionRepository, times(1)).save(any(Transaction.class));
         verify(eventProducer, times(1)).publish(any(TransactionEvent.class));
     }
+
+    @Test
+    void transfer_cachedFailedTransaction_returnsPersistedFailureReason() {
+
+        Transaction existing = new Transaction();
+        existing.setId(77L);
+        existing.setUserId(TEST_USER_ID);
+        existing.setSenderAccountId(1L);
+        existing.setReceiverAccountId(2L);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setStatus("FAILED");
+        existing.setFailureReason("Yetersiz bakiye");
+        existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existing.setCreatedAt(LocalDateTime.now());
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.of(existing));
+
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals("FAILED", response.getStatus());
+        assertEquals("Yetersiz bakiye", response.getFailureReason());
+        verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+    }
 }
