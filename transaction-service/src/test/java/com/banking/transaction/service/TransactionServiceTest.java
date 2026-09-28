@@ -206,4 +206,21 @@ class TransactionServiceTest {
         verify(transactionRepository, never()).save(any(Transaction.class));
         verify(eventProducer, never()).publish(any(TransactionEvent.class));
     }
+
+    @Test
+    void transfer_eventProducerThrowsException_stillReturnsSuccessfulResponse() {
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
+                .thenReturn(new AccountResponse());
+        doThrow(new RuntimeException("Failed to construct kafka producer"))
+                .when(eventProducer).publish(any(TransactionEvent.class));
+
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals("COMPLETED", response.getStatus());
+        verify(transactionRepository, times(1)).save(any(Transaction.class));
+        verify(eventProducer, times(1)).publish(any(TransactionEvent.class));
+    }
 }

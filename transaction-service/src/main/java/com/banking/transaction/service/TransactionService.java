@@ -15,6 +15,8 @@ import com.banking.transaction.repository.TransactionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ import java.util.Optional;
 
 @Service
 public class TransactionService {
+
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
     @Autowired
     private TransactionRepository transactionRepository;
@@ -44,7 +48,7 @@ public class TransactionService {
             Transaction existingTransaction = existing.get();
             if (!matchesRequest(existingTransaction, request)) {
                 throw new IdempotencyConflictException(
-                        "Bu Idempotency-Key daha once farkli bir islem icin kullanilmis, ayni key ile farkli bir transfer yapamazsiniz"
+                        "Bu Idempotency-Key daha önce farklı bir işlem için kullanılmıs, aynı key ile farklı bir transfer yapamazsınız"
                 );
             }
             return toResponse(existingTransaction);
@@ -110,19 +114,24 @@ public class TransactionService {
                     .orElseThrow(() -> e);
             if (!matchesRequest(raceWinner, request)) {
                 throw new IdempotencyConflictException(
-                        "Bu Idempotency-Key daha once farklı bir işlem icin kullanılmış, aynı key ile farklı bir transfer yapamazsınız"
+                        "Bu Idempotency-Key daha once farklı bir işlem için kullanılmış, aynı key ile farklı bir transfer yapamazsınız"
                 );
             }
             return toResponse(raceWinner);
         }
 
-        eventProducer.publish(new TransactionEvent(
-                transaction.getId(),
-                transaction.getSenderAccountId(),
-                transaction.getReceiverAccountId(),
-                transaction.getAmount(),
-                transaction.getStatus()
-        ));
+        try {
+            eventProducer.publish(new TransactionEvent(
+                    transaction.getId(),
+                    transaction.getSenderAccountId(),
+                    transaction.getReceiverAccountId(),
+                    transaction.getAmount(),
+                    transaction.getStatus()
+            ));
+        } catch (Exception e) {
+            log.error("Transaction id={} için Kafka event yayınlanamadı, işlem DB'de kayıtlı ama bildirim gitmedi: {}",
+                    transaction.getId(), e.getMessage());
+        }
 
         TransactionResponse response = toResponse(transaction);
         if (failureReason != null) {
