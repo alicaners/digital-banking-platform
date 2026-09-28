@@ -25,6 +25,23 @@ Account, Transaction), bu header'ları kullanarak kendi ownership/
 yetkilendirme kontrollerini yapar (bkz. docs/asama8-notlar.md,
 "Gün 1 — Konu B").
 
+## İç Servis Çağrılarının Korunması (`/internal/**`)
+Servisler arası çağrılar için kullanılan endpoint'ler (örn.
+`account-service`'teki `internal/transfer`) yalnızca container-to-
+container iletişim için tasarlanmıştır ve normalde JWT taşımaz -
+Feign, servisler arası çağrılarda token eklemez. Bu, `/internal/`
+yolunun dışarıdan (Gateway üzerinden) doğrudan çağrılabildiği bir
+açık oluşturuyordu: token'sız bir istek, JWT kontrolünden istisna
+tutulan open endpoint gibi davranıp doğrudan downstream servise
+ulaşabilirdi.
+
+Bunu kapatmak için `JwtAuthenticationFilter`, JWT/open-endpoint
+kontrollerinden **önce** çalışan bir kontrol ekler: path içinde
+`/internal/` geçen her istek, kimden geldiğine bakılmadan doğrudan
+403 Forbidden ile reddedilir. Bu sayede `/internal/**` altındaki
+endpoint'ler sadece servisler arası (Gateway'in dışından erişilemeyen)
+çağrılara açık kalır (bkz. docs/asama8-notlar.md, "Gün 3 — Madde 1").
+
 ## Rate Limiting
 Tüm isteklere (JWT kontrolünden bile önce) global bir istek sınırı
 uygulanır: 10 saniyede en fazla 10 istek kabul edilir, aşımda

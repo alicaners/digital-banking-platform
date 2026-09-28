@@ -18,6 +18,11 @@ POST /api/accounts/internal/transfer - İki hesap arasında atomic transfer
 (yalnızca Transaction Service tarafından, Feign üzerinden çağrılır;
 sender hesabında sahiplik kontrolü var)
 
+**Not**: `/internal/` altındaki tüm endpoint'ler (örn. `internal/transfer`)
+Gateway seviyesinde dışarıdan gelen isteklere kapatılmıştır - sadece
+servisler arası (container-to-container) çağrılara açıktır
+(bkz. docs/asama8-notlar.md, "Gün 3 — Madde 1").
+
 ## Veritabanı
 PostgreSQL - account_db
 
@@ -52,9 +57,15 @@ veritabanına sahip olmaları nedeniyle bu basitleştirmeye gidildi
 geçmek için.
 
 **Eşzamanlılık**: `Account` entity'sinde `@Version` alanı ile
-optimistic locking uygulanır. Kod seviyesinde doğrulandı; gerçek
-eşzamanlı çakışma senaryosu Postman ile manuel test edilemedi
-(bkz. docs/asama3-notlar.md).
+optimistic locking uygulanır: iki eşzamanlı işlem aynı hesabı
+güncellemeye çalıştığında, Hibernate ikinci (geç kalan) işlemi
+`ObjectOptimisticLockingFailureException` ile reddeder. Bu exception,
+`GlobalExceptionHandler`'da yakalanıp kullanıcıya anlaşılır bir
+Türkçe mesajla `409 Conflict` olarak döndürülür ("Bu hesap üzerinde
+eşzamanlı bir işlem gerçekleşti, lütfen tekrar deneyin"). Davranış
+kod seviyesinde doğrulandı; gerçek eşzamanlı çakışma senaryosu Postman
+ile manuel test edilemedi çünkü istekler arasındaki gecikme çakışmayı
+tetiklemeye yetmedi (bkz. docs/asama8-notlar.md, "Gün 3 — Madde 6").
 
 **IBAN üretimi (basitleştirilmiş)**: Bu projede IBAN'lar, gerçek
 ISO 7064 (MOD 97-10) checksum algoritması ve resmi banka kodları

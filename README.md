@@ -111,6 +111,12 @@ senkron HTTP çağrıları yapar (servis keşfi Eureka üzerinden).
 Transaction Service, her işlem sonrası Kafka üzerinden Notification
 Service'e asenkron olay (event) yayınlar.
 
+Bu servisler arası çağrılar için kullanılan `/internal/**`
+endpoint'leri (örn. `account-service`'teki `internal/transfer`),
+Gateway seviyesinde dışarıdan gelen isteklere tamamen kapatılmıştır -
+sadece container-to-container iletişime açıktır (bkz.
+docs/asama8-notlar.md, "Gün 3 — Madde 1").
+
 ## Atomic Transfer ve Idempotency
 
 Para transferi, Account Service içinde tek bir `@Transactional`
@@ -124,9 +130,14 @@ Her transfer isteği, istemcinin ürettiği bir `Idempotency-Key`
 header'ı taşımak zorundadır - aynı key ile tekrar gönderilen bir
 istek, yeni bir transfer yapmadan önceki sonucu döndürür. Bu,
 ağ hatası/timeout sonrası istemcinin isteği güvenle tekrar
-gönderebilmesini sağlar.
+gönderebilmesini sağlar. Key'ler kullanıcı bazında (per-user)
+benzersizdir - iki farklı kullanıcı aynı key değerini bağımsız
+olarak kullanabilir; aynı kullanıcı aynı key'i farklı bir transfer
+için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
+`409 Conflict` ile reddedilir.
 
-(bkz. docs/asama8-notlar.md, "Gün 2 — Konu A" ve "Gün 2 — Konu B")
+(bkz. docs/asama8-notlar.md, "Gün 2 — Konu A", "Gün 2 — Konu B" ve
+"Gün 3 — Madde 2/3")
 
 ## Dayanıklılık ve Performans
 
@@ -137,6 +148,9 @@ gönderebilmesini sağlar.
 - **Retry**: Sadece geçici (5xx/bağlantı) hatalarda, programatik
   `RetryTemplate` ile en fazla 3 kez tekrar deneme yapılır. İş kuralı
   hataları (4xx) hiç tekrar denenmez.
+- **Optimistic Locking**: Account entity'sinde `@Version` alanıyla
+  korunan hesaplarda, iki eşzamanlı işlem çakıştığında geç kalan işlem
+  sessizce üzerine yazmak yerine `409 Conflict` ile reddedilir.
 - **Rate Limiter**: Gateway seviyesinde aşırı istek yüküne karşı
   koruma sağlanır.
 - **Redis Cache**: Sık sorgulanan hesap verileri cache'lenir, bakiye
@@ -186,6 +200,8 @@ tam konteynerleştirme ve GitHub Actions ile sürekli entegrasyon (CI).
 
 Devam eden çalışma: bir güvenlik/mimari incelemesi sonrası tespit
 edilen bulgular doğrultusunda sağlamlaştırma (hardening) çalışmaları
-sürdürülüyor. Gün 1 (hızlı güvenlik düzeltmeleri + yetkilendirme) ve
-Gün 2 (atomic transfer + idempotency/circuit breaker) tamamlandı,
-Gün 3 devam ediyor (bkz. docs/asama8-notlar.md).
+sürdürülüyor. Gün 1 (hızlı güvenlik düzeltmeleri + yetkilendirme),
+Gün 2 (atomic transfer + idempotency/circuit breaker) ve Gün 3
+(internal endpoint koruması, idempotency conflict handling, circuit
+breaker ayarları, optimistic locking) tamamlandı, Gün 4 sürüyor
+(bkz. docs/asama8-notlar.md).

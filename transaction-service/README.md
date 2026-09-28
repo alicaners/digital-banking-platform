@@ -20,7 +20,11 @@ PostgreSQL - transaction_db
 
 ## Servisler Arası İletişim
 Account Service'e Feign Client (AccountServiceClient) üzerinden
-senkron HTTP çağrıları yapılır.
+senkron HTTP çağrıları yapılır. Bu çağrı, Account Service'in
+`/api/accounts/internal/transfer` endpoint'ine gider - bu endpoint,
+Gateway seviyesinde dışarıdan erişime tamamen kapalıdır (bkz.
+docs/asama8-notlar.md, "Gün 3 — Madde 1"), sadece servisler arası
+(Eureka/Feign üzerinden) erişilebilir.
 
 ## Atomic Transfer (Aşama 8'de basitleştirildi)
 Transfer işlemi artık Account Service içinde tek bir `@Transactional`
@@ -40,15 +44,30 @@ senaryomuzda böyle bir dağıtıklık olmadığı için kaldırıldı.
 İşlem durumları artık sadece:
 - COMPLETED: transfer başarıyla gerçekleşti
 - FAILED: transfer gerçekleşmedi (yetersiz bakiye, yetkisiz erişim,
-  hesap bulunamadı, Account Service'e ulaşılamadı vb.)
+  hesap bulunamadı, Account Service'e ulaşılamadı vb.). Başarısızlık
+  nedeni (`failureReason`) artık veritabanında kalıcı olarak saklanıyor
+  - aynı `Idempotency-Key` ile tekrar istek geldiğinde bile doğru
+    şekilde döner (bkz. docs/asama8-notlar.md, "Gün 3 — Madde 7.2").
+
+## Validasyonlar
+- Gönderen ve alıcı hesap aynı olamaz (`senderAccountId == receiverAccountId`
+  ise `400 Bad Request`, bkz. "Gün 3 — Madde 4").
+- Aynı `Idempotency-Key` ile, **daha önce kullanıldığından farklı** bir
+  transfer body'si (farklı tutar/hesap) gönderilirse `409 Conflict`
+  döner - idempotency key'in "aynı isteğin güvenli tekrarı" anlamına
+  gelmesi gerektiği için, farklı bir işlem için yeniden kullanılması
+  bir hata olarak kabul edilir (bkz. "Gün 3 — Madde 3").
 
 ## Idempotency
 Her transfer isteği, istemcinin ürettiği bir `Idempotency-Key` header'ı
-taşımak zorundadır. Bu key veritabanında (`transactions.idempotency_key`,
-unique) saklanır. Aynı key ile gelen bir istek tekrar işlenmez, ilk
-denemenin sonucu doğrudan döndürülür - bu, ağ hatası/timeout sonrası
-istemcinin isteği güvenle tekrar gönderebilmesini sağlar
-(bkz. docs/asama8-notlar.md, "Gün 2 — Konu B").
+taşımak zorundadır. Bu key, veritabanında **kullanıcı bazında**
+(`(user_id, idempotency_key)` birleşik unique kısıtı) saklanır - yani
+iki farklı kullanıcı aynı key string'ini tesadüfen kullansa bile
+birbirlerinin transfer kaydını göremezler (bkz. docs/asama8-notlar.md,
+"Gün 3 — Madde 2"; ilk tasarım "Gün 2 — Konu B"). Aynı kullanıcının aynı
+key ile tekrar gönderdiği istek tekrar işlenmez, ilk denemenin sonucu
+doğrudan döndürülür - bu, ağ hatası/timeout sonrası istemcinin isteği
+güvenle tekrar gönderebilmesini sağlar.
 
 ## Dayanıklılık (Resilience)
 Account Service çağrısı, `AccountServiceExecutor` üzerinden Circuit
@@ -59,6 +78,15 @@ Breaker (Resilience4j, açıkça `accountService` adıyla) ve Retry
 - Sadece geçici (5xx/bağlantı) hatalar en fazla 3 kez, 500ms arayla
   tekrar denenir. İş kuralı hataları (400/403/404 gibi 4xx) hiç tekrar
   denenmez, çünkü sonuç değişmeyecektir.
+- `RetryTemplate`, `CircuitBreaker.run(...)`'ı sarmaladığı için, tek bir
+  kullanıcı isteği circuit breaker'a birden fazla (retry sayısı kadar)
+  ayrı "çağrı" olarak yansıyabilir - bu, gerçek kesinti senaryosunda
+  circuit'in bazen bir istek ortasında açılmasına yol açar (bkz.
+  docs/asama8-notlar.md, "Gün 3 — Madde 5").
+- `minimum-number-of-calls` ayarı `sliding-window-size` ile uyumlu
+  (10) hale getirildi - önceden bu ayar tanımlı olmadığı için
+  Resilience4j'nin varsayılanı (100) geçerliydi, bu da circuit
+  breaker'ın pratikte hiç devreye giremeyeceği anlamına geliyordu.
 
 Aşama 5'te eklenen `@Retryable` kullanımı, self-invocation (AOP proxy)
 kısıtlaması nedeniyle aslında hiç tetiklenmiyordu; Aşama 8'de programatik
@@ -66,11 +94,36 @@ kısıtlaması nedeniyle aslında hiç tetiklenmiyordu; Aşama 8'de programatik
 Feign'in otomatik circuit breaker'ının ürettiği isim, `application.yml`
 config'iyle eşleşmiyordu (bkz. docs/asama8-notlar.md, "Gün 2 — Konu B").
 
+Circuit Breaker ve Retry'ın gerçek bir servis kesintisi senaryosunda
+(Account Service bilerek durdurularak) uçtan uca test edildiği ve
+CLOSED → OPEN → HALF-OPEN → CLOSED yaşam döngüsünün doğrulandığı
+detaylar için bkz. docs/asama8-notlar.md, "Gün 3 — Madde 5".
+
+## Kafka Event Yayını
+Her transfer sonrası bir `TransactionEvent` Kafka'ya yayınlanır
+(bildirim servisi tüketir). Bu yayın işlemi kendi `try/catch` bloğunda
+izole edilmiştir - Kafka geçici olarak kullanılamıyorsa, transfer sonucu
+(zaten veritabanına kaydedilmiş olan gerçek durum) yine de client'a
+doğru şekilde döner, sadece yayın hatası loglanır. Önceden bu koruma
+olmadığı için, başarılı bir transfer bile Kafka kesintisinde client'a
+yanlışlıkla `500` olarak dönebiliyordu (bkz. docs/asama8-notlar.md,
+"Gün 3 — Madde 7.1").
+
+## Eşzamanlılık (Optimistic Locking)
+Account Service tarafında, aynı hesabın eşzamanlı güncellenmeye
+çalışılması durumunda oluşan çakışmalar (`OptimisticLockException`),
+artık çirkin bir `500` yerine anlaşılır bir `409 Conflict` mesajı
+olarak bu servise (ve dolayısıyla client'a) yansır (bkz.
+docs/asama8-notlar.md, "Gün 3 — Madde 6").
+
 ## Test
-Unit testler (Mockito), yeni sadeleştirilmiş transfer akışını
-(başarı, hata, doğru request'in gönderilmesi, idempotency-key ile
-tekrar gönderilen isteğin cache'lenmiş sonucu döndürmesi) kapsar
-(bkz. docs/asama8-notlar.md).
+Unit testler (Mockito), transfer akışının tüm senaryolarını kapsar:
+başarı, hata, doğru request'in gönderilmesi, idempotency-key ile
+tekrar gönderilen isteğin cache'lenmiş sonucu döndürmesi, farklı
+kullanıcıların aynı key'i bağımsız kullanabilmesi, aynı key + farklı
+body'nin 409 Conflict vermesi, Kafka yayın hatasının transferi
+etkilememesi, ve cache'ten dönen bir FAILED transferin `failureReason`'ını
+korumas (bkz. docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
 http://localhost:8084/swagger-ui.html
