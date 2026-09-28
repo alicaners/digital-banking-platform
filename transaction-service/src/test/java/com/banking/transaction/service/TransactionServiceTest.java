@@ -247,4 +247,18 @@ class TransactionServiceTest {
         assertEquals("Yetersiz bakiye", response.getFailureReason());
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
     }
+
+    @Test
+    void transfer_senderEqualsReceiver_throwsIllegalArgumentException() {
+
+        transferRequest.setSenderAccountId(1L);
+        transferRequest.setReceiverAccountId(1L);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY)
+        );
+
+        verify(transactionRepository, never()).findByIdempotencyKeyAndUserId(anyString(), anyLong());
+        verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+    }
 }

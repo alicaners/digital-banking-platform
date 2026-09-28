@@ -43,6 +43,10 @@ public class TransactionService {
 
     public TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey) {
 
+        if (request.getSenderAccountId().equals(request.getReceiverAccountId())) {
+            throw new IllegalArgumentException("Gönderen ve alıcı hesap aynı olamaz");
+        }
+
         Optional<Transaction> existing = transactionRepository.findByIdempotencyKeyAndUserId(idempotencyKey, userId);
         if (existing.isPresent()) {
             Transaction existingTransaction = existing.get();
