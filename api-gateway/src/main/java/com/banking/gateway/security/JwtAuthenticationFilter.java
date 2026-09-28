@@ -37,6 +37,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
+        if (isInternalEndpoint(path)) {
+            return forbidden(exchange);
+        }
+
         if (isOpenEndpoint(path)) {
             return chain.filter(exchange);
         }
@@ -68,6 +72,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return chain.filter(mutatedExchange);
     }
 
+    private boolean isInternalEndpoint(String path) {
+        return path.contains("/internal/");
+    }
+
     private boolean isOpenEndpoint(String path) {
         return openEndpoints.stream().anyMatch(path::startsWith);
     }
@@ -75,6 +83,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private Mono<Void> unauthorized(ServerWebExchange exchange) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        return response.setComplete();
+    }
+
+    private Mono<Void> forbidden(ServerWebExchange exchange) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.FORBIDDEN);
         return response.setComplete();
     }
 
