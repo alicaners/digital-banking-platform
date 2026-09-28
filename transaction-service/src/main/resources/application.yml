@@ -41,6 +41,7 @@ resilience4j:
     instances:
       accountService:
         sliding-window-size: 10
+        minimum-number-of-calls: 10
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
