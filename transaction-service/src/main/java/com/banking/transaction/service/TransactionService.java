@@ -17,7 +17,6 @@ import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -29,17 +28,20 @@ public class TransactionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
-    @Autowired
-    private TransactionRepository transactionRepository;
+    private final TransactionRepository transactionRepository;
+    private final AccountServiceClient accountServiceClient;
+    private final AccountServiceExecutor accountServiceExecutor;
+    private final TransactionEventProducer eventProducer;
 
-    @Autowired
-    private AccountServiceClient accountServiceClient;
-
-    @Autowired
-    private AccountServiceExecutor accountServiceExecutor;
-
-    @Autowired
-    private TransactionEventProducer eventProducer;
+    public TransactionService(TransactionRepository transactionRepository,
+                              AccountServiceClient accountServiceClient,
+                              AccountServiceExecutor accountServiceExecutor,
+                              TransactionEventProducer eventProducer) {
+        this.transactionRepository = transactionRepository;
+        this.accountServiceClient = accountServiceClient;
+        this.accountServiceExecutor = accountServiceExecutor;
+        this.eventProducer = eventProducer;
+    }
 
     public TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey) {
 
