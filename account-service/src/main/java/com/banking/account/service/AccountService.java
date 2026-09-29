@@ -6,6 +6,7 @@ import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.entity.Account;
 import com.banking.account.exception.AccessDeniedException;
+import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import feign.FeignException;
@@ -35,7 +36,7 @@ public class AccountService {
         try {
             customerServiceClient.checkCustomerExists(request.getCustomerId());
         } catch (FeignException.NotFound e) {
-            throw new IllegalArgumentException("Belirtilen müşteri bulunamadı");
+            throw new ResourceNotFoundException("Belirtilen müşteri bulunamadı");
         }
 
         Account account = new Account();
@@ -52,7 +53,7 @@ public class AccountService {
     @Cacheable(value = "accounts", key = "#id")
     public AccountResponse getAccountById(Long id, Long userId, String role) {
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Hesap bulunamadı"));
 
         checkReadAccess(account, userId, role);
 
@@ -82,7 +83,7 @@ public class AccountService {
         }
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Hesap bulunamadı"));
 
         account.setBalance(account.getBalance().add(amount));
         accountRepository.save(account);
@@ -98,7 +99,7 @@ public class AccountService {
         }
 
         Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new IllegalArgumentException("Hesap bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Hesap bulunamadı"));
 
         checkWriteAccess(account, userId);
 
@@ -124,12 +125,12 @@ public class AccountService {
         }
 
         Account sender = accountRepository.findById(request.getSenderAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("Gönderen hesap bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Gönderen hesap bulunamadı"));
 
         checkWriteAccess(sender, userId);
 
         Account receiver = accountRepository.findById(request.getReceiverAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("Alıcı hesap bulunamadı"));
+                .orElseThrow(() -> new ResourceNotFoundException("Alıcı hesap bulunamadı"));
 
         if (!"ACTIVE".equals(sender.getStatus())) {
             throw new IllegalArgumentException("Gönderen hesap aktif değil");
