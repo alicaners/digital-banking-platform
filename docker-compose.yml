@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16
@@ -13,6 +11,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banking_user -d banking_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - banking-network
 
@@ -21,6 +24,11 @@ services:
     container_name: banking-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    healthcheck:
+      test: ["CMD", "cub", "zk-ready", "localhost:2181", "5"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - banking-network
 
@@ -28,7 +36,8 @@ services:
     image: confluentinc/cp-kafka:7.5.0
     container_name: banking-kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
@@ -36,6 +45,11 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "cub", "kafka-ready", "1", "5", "-b", "localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - banking-network
 
@@ -44,6 +58,11 @@ services:
     container_name: banking-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - banking-network
 
@@ -66,7 +85,8 @@ services:
       EUREKA_HOST: eureka-server
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      - eureka-server
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
@@ -80,8 +100,10 @@ services:
       EUREKA_HOST: eureka-server
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      - postgres
-      - eureka-server
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
@@ -94,8 +116,10 @@ services:
       DB_HOST: postgres
       EUREKA_HOST: eureka-server
     depends_on:
-      - postgres
-      - eureka-server
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
@@ -109,9 +133,12 @@ services:
       REDIS_HOST: redis
       EUREKA_HOST: eureka-server
     depends_on:
-      - postgres
-      - redis
-      - eureka-server
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
@@ -125,9 +152,12 @@ services:
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
     depends_on:
-      - postgres
-      - kafka
-      - eureka-server
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
@@ -140,8 +170,10 @@ services:
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
     depends_on:
-      - kafka
-      - eureka-server
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
     networks:
       - banking-network
 
