@@ -5,7 +5,6 @@ import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.service.AccountService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.banking.account.dto.AmountRequest;
@@ -15,8 +14,11 @@ import java.util.List;
 @RequestMapping("/api/accounts")
 public class AccountController {
 
-    @Autowired
-    private AccountService accountService;
+    private final AccountService accountService;
+
+    public AccountController(AccountService accountService) {
+        this.accountService = accountService;
+    }
 
     @PostMapping
     public ResponseEntity<AccountResponse> openAccount(

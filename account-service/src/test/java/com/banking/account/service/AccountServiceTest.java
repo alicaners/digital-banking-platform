@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.banking.account.exception.ResourceNotFoundException;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -115,8 +116,8 @@ class AccountServiceTest {
 
         when(accountRepository.findById(99L)).thenReturn(Optional.empty());
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> accountService.getAccountById(99L, OWNER_USER_ID, "CUSTOMER")
         );
 

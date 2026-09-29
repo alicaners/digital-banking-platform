@@ -10,7 +10,6 @@ import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import feign.FeignException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
@@ -22,14 +21,17 @@ import java.util.List;
 @Service
 public class AccountService {
 
-    @Autowired
-    private AccountRepository accountRepository;
+    private final AccountRepository accountRepository;
+    private final IbanGenerator ibanGenerator;
+    private final CustomerServiceClient customerServiceClient;
 
-    @Autowired
-    private IbanGenerator ibanGenerator;
-
-    @Autowired
-    private CustomerServiceClient customerServiceClient;
+    public AccountService(AccountRepository accountRepository,
+                          IbanGenerator ibanGenerator,
+                          CustomerServiceClient customerServiceClient) {
+        this.accountRepository = accountRepository;
+        this.ibanGenerator = ibanGenerator;
+        this.customerServiceClient = customerServiceClient;
+    }
 
     public AccountResponse openAccount(AccountRequest request, Long userId) {
 
