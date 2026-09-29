@@ -1,11 +1,15 @@
 package com.banking.account.integration;
 
+import com.banking.account.client.CustomerServiceClient;
 import com.banking.account.dto.AccountRequest;
 import com.banking.account.dto.AccountResponse;
 import com.banking.account.service.AccountService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -16,6 +20,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -33,10 +39,20 @@ class AccountServiceIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
     }
 
     @Autowired
     private AccountService accountService;
+
+    @MockBean
+    private CustomerServiceClient customerServiceClient;
+
+    @BeforeEach
+    void mockCustomerServiceClient() {
+        given(customerServiceClient.checkCustomerExists(anyLong()))
+                .willReturn(ResponseEntity.ok().build());
+    }
 
     private static final Long TEST_USER_ID = 1L;
 
@@ -72,4 +88,4 @@ class AccountServiceIntegrationTest {
         AccountResponse result = accountService.getAccountById(account.getId(), TEST_USER_ID, "CUSTOMER");
         assertEquals(new BigDecimal("350.00"), result.getBalance());
     }
-}
+}   
