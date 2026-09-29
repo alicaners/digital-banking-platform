@@ -5,7 +5,6 @@ import com.banking.customer.dto.CustomerResponse;
 import com.banking.customer.entity.Customer;
 import com.banking.customer.exception.AccessDeniedException;
 import com.banking.customer.repository.CustomerRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,8 +12,11 @@ import java.util.List;
 @Service
 public class CustomerService {
 
-    @Autowired
-    private CustomerRepository customerRepository;
+    private final CustomerRepository customerRepository;
+
+    public CustomerService(CustomerRepository customerRepository) {
+        this.customerRepository = customerRepository;
+    }
 
     public CustomerResponse createCustomer(CustomerRequest request, Long userId) {
 
@@ -63,6 +65,7 @@ public class CustomerService {
                 .map(this::toResponse)
                 .toList();
     }
+
     public boolean existsById(Long id) {
         return customerRepository.existsById(id);
     }

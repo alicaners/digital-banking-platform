@@ -4,7 +4,6 @@ import com.banking.customer.dto.CustomerRequest;
 import com.banking.customer.dto.CustomerResponse;
 import com.banking.customer.service.CustomerService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,8 +13,11 @@ import java.util.List;
 @RequestMapping("/api/customers")
 public class CustomerController {
 
-    @Autowired
-    private CustomerService customerService;
+    private final CustomerService customerService;
+
+    public CustomerController(CustomerService customerService) {
+        this.customerService = customerService;
+    }
 
     @PostMapping
     public ResponseEntity<CustomerResponse> createCustomer(
