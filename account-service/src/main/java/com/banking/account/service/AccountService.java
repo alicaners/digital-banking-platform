@@ -1,5 +1,6 @@
 package com.banking.account.service;
 
+import com.banking.account.client.CustomerServiceClient;
 import com.banking.account.dto.AccountRequest;
 import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
@@ -7,6 +8,7 @@ import com.banking.account.entity.Account;
 import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
+import feign.FeignException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
@@ -25,7 +27,16 @@ public class AccountService {
     @Autowired
     private IbanGenerator ibanGenerator;
 
+    @Autowired
+    private CustomerServiceClient customerServiceClient;
+
     public AccountResponse openAccount(AccountRequest request, Long userId) {
+
+        try {
+            customerServiceClient.checkCustomerExists(request.getCustomerId());
+        } catch (FeignException.NotFound e) {
+            throw new IllegalArgumentException("Belirtilen müşteri bulunamadı");
+        }
 
         Account account = new Account();
         account.setUserId(userId);

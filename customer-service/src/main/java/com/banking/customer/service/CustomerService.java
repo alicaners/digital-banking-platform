@@ -63,6 +63,9 @@ public class CustomerService {
                 .map(this::toResponse)
                 .toList();
     }
+    public boolean existsById(Long id) {
+        return customerRepository.existsById(id);
+    }
 
     public CustomerResponse updateCustomer(Long id, CustomerRequest request, Long userId) {
         Customer customer = customerRepository.findById(id)

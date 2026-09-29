@@ -39,6 +39,14 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.getAllCustomers(userId, role));
     }
 
+    @GetMapping("/internal/{id}")
+    public ResponseEntity<Void> checkCustomerExists(@PathVariable Long id) {
+        if (customerService.existsById(id)) {
+            return ResponseEntity.ok().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<CustomerResponse> updateCustomer(
             @PathVariable Long id,
