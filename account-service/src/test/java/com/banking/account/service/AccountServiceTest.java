@@ -2,6 +2,7 @@ package com.banking.account.service;
 
 import com.banking.account.dto.AccountResponse;
 import com.banking.account.entity.Account;
+import com.banking.account.entity.AccountStatus;
 import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
@@ -44,7 +45,7 @@ class AccountServiceTest {
         existingAccount.setCustomerId(1L);
         existingAccount.setBalance(new BigDecimal("500.00"));
         existingAccount.setCurrency("TRY");
-        existingAccount.setStatus("ACTIVE");
+        existingAccount.setStatus(AccountStatus.ACTIVE);
     }
 
     @Test

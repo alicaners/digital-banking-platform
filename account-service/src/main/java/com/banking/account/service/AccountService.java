@@ -5,6 +5,7 @@ import com.banking.account.dto.AccountRequest;
 import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.entity.Account;
+import com.banking.account.entity.AccountStatus;
 import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.repository.AccountRepository;
@@ -134,11 +135,11 @@ public class AccountService {
         Account receiver = accountRepository.findById(request.getReceiverAccountId())
                 .orElseThrow(() -> new ResourceNotFoundException("Alıcı hesap bulunamadı"));
 
-        if (!"ACTIVE".equals(sender.getStatus())) {
+        if (sender.getStatus() != AccountStatus.ACTIVE) {
             throw new IllegalArgumentException("Gönderen hesap aktif değil");
         }
 
-        if (!"ACTIVE".equals(receiver.getStatus())) {
+        if (receiver.getStatus() != AccountStatus.ACTIVE) {
             throw new IllegalArgumentException("Alıcı hesap aktif değil");
         }
 
