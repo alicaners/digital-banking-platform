@@ -71,6 +71,11 @@ services:
       context: ./eureka-server
     image: eureka-server:latest
     container_name: banking-eureka-server
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8761' || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - banking-network
 
@@ -86,7 +91,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
@@ -105,7 +110,7 @@ services:
       postgres:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
@@ -123,7 +128,7 @@ services:
       postgres:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
@@ -144,7 +149,7 @@ services:
       redis:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
@@ -165,7 +170,7 @@ services:
       kafka:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
@@ -181,7 +186,7 @@ services:
       kafka:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - banking-network
 
