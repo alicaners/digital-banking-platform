@@ -3,8 +3,8 @@ services:
     image: postgres:16
     container_name: banking-postgres
     environment:
-      POSTGRES_USER: banking_user
-      POSTGRES_PASSWORD: banking_pass
+      POSTGRES_USER: ${DB_USERNAME:-banking_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-banking_pass}
       POSTGRES_DB: banking_db
     ports:
       - "5432:5432"
@@ -12,7 +12,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U banking_user -d banking_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-banking_user} -d banking_db"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -97,6 +97,8 @@ services:
     container_name: banking-auth-service
     environment:
       DB_HOST: postgres
+      DB_USERNAME: ${DB_USERNAME:-banking_user}
+      DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       EUREKA_HOST: eureka-server
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
@@ -114,6 +116,8 @@ services:
     container_name: banking-customer-service
     environment:
       DB_HOST: postgres
+      DB_USERNAME: ${DB_USERNAME:-banking_user}
+      DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       EUREKA_HOST: eureka-server
     depends_on:
       postgres:
@@ -130,6 +134,8 @@ services:
     container_name: banking-account-service
     environment:
       DB_HOST: postgres
+      DB_USERNAME: ${DB_USERNAME:-banking_user}
+      DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       REDIS_HOST: redis
       EUREKA_HOST: eureka-server
     depends_on:
@@ -149,6 +155,8 @@ services:
     container_name: banking-transaction-service
     environment:
       DB_HOST: postgres
+      DB_USERNAME: ${DB_USERNAME:-banking_user}
+      DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
     depends_on:
