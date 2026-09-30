@@ -4,10 +4,11 @@ import com.banking.customer.dto.CustomerRequest;
 import com.banking.customer.dto.CustomerResponse;
 import com.banking.customer.service.CustomerService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -35,10 +36,11 @@ public class CustomerController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CustomerResponse>> getAllCustomers(
+    public ResponseEntity<Page<CustomerResponse>> getAllCustomers(
             @RequestHeader("X-User-Id") Long userId,
-            @RequestHeader("X-User-Role") String role) {
-        return ResponseEntity.ok(customerService.getAllCustomers(userId, role));
+            @RequestHeader("X-User-Role") String role,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(customerService.getAllCustomers(userId, role, pageable));
     }
 
     @GetMapping("/internal/{id}")

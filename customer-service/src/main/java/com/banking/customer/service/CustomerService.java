@@ -6,9 +6,9 @@ import com.banking.customer.entity.Customer;
 import com.banking.customer.entity.Role;
 import com.banking.customer.exception.AccessDeniedException;
 import com.banking.customer.repository.CustomerRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 public class CustomerService {
@@ -52,19 +52,14 @@ public class CustomerService {
         return toResponse(customer);
     }
 
-    public List<CustomerResponse> getAllCustomers(Long userId, String role) {
+    public Page<CustomerResponse> getAllCustomers(Long userId, String role, Pageable pageable) {
         if (Role.valueOf(role) == Role.ADMIN) {
-            return customerRepository.findAll()
-                    .stream()
-                    .map(this::toResponse)
-                    .toList();
+            return customerRepository.findAll(pageable)
+                    .map(this::toResponse);
         }
 
-        return customerRepository.findAll()
-                .stream()
-                .filter(customer -> customer.getUserId().equals(userId))
-                .map(this::toResponse)
-                .toList();
+        return customerRepository.findByUserId(userId, pageable)
+                .map(this::toResponse);
     }
 
     public boolean existsById(Long id) {
