@@ -3,6 +3,7 @@ package com.banking.customer.service;
 import com.banking.customer.dto.CustomerRequest;
 import com.banking.customer.dto.CustomerResponse;
 import com.banking.customer.entity.Customer;
+import com.banking.customer.entity.Role;
 import com.banking.customer.exception.AccessDeniedException;
 import com.banking.customer.repository.CustomerRepository;
 import org.springframework.stereotype.Service;
@@ -52,7 +53,7 @@ public class CustomerService {
     }
 
     public List<CustomerResponse> getAllCustomers(Long userId, String role) {
-        if ("ADMIN".equals(role)) {
+        if (Role.valueOf(role) == Role.ADMIN) {
             return customerRepository.findAll()
                     .stream()
                     .map(this::toResponse)
@@ -96,7 +97,7 @@ public class CustomerService {
     }
 
     private void checkReadAccess(Customer customer, Long userId, String role) {
-        if ("ADMIN".equals(role)) {
+        if (Role.valueOf(role) == Role.ADMIN) {
             return;
         }
         if (!customer.getUserId().equals(userId)) {
