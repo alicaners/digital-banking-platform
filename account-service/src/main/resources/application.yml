@@ -21,6 +21,10 @@ spring:
       port: 6379
   cache:
     type: redis
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: false
 
 eureka:
   client:
@@ -28,3 +32,20 @@ eureka:
       defaultZone: http://${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
+
+feign:
+  circuitbreaker:
+    enabled: false
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      customerService:
+        sliding-window-size: 10
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        ignore-exceptions:
+          - com.banking.account.exception.NonRetryableException

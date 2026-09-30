@@ -8,7 +8,9 @@ import com.banking.account.entity.Account;
 import com.banking.account.entity.AccountStatus;
 import com.banking.account.entity.Role;
 import com.banking.account.exception.AccessDeniedException;
+import com.banking.account.exception.NonRetryableException;
 import com.banking.account.exception.ResourceNotFoundException;
+import com.banking.account.executor.CustomerServiceExecutor;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.util.IbanGenerator;
 import feign.FeignException;
@@ -27,21 +29,27 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final IbanGenerator ibanGenerator;
     private final CustomerServiceClient customerServiceClient;
+    private final CustomerServiceExecutor customerServiceExecutor;
 
     public AccountService(AccountRepository accountRepository,
                           IbanGenerator ibanGenerator,
-                          CustomerServiceClient customerServiceClient) {
+                          CustomerServiceClient customerServiceClient,
+                          CustomerServiceExecutor customerServiceExecutor) {
         this.accountRepository = accountRepository;
         this.ibanGenerator = ibanGenerator;
         this.customerServiceClient = customerServiceClient;
+        this.customerServiceExecutor = customerServiceExecutor;
     }
 
     public AccountResponse openAccount(AccountRequest request, Long userId) {
 
         try {
-            customerServiceClient.checkCustomerExists(request.getCustomerId());
-        } catch (FeignException.NotFound e) {
-            throw new ResourceNotFoundException("Belirtilen müşteri bulunamadı");
+            customerServiceExecutor.execute(() -> customerServiceClient.checkCustomerExists(request.getCustomerId()));
+        } catch (NonRetryableException e) {
+            if (e.getCause() instanceof FeignException.NotFound) {
+                throw new ResourceNotFoundException("Belirtilen müşteri bulunamadı");
+            }
+            throw e;
         }
 
         Account account = new Account();
