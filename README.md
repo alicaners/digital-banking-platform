@@ -6,7 +6,7 @@ Spring Boot ve Spring Cloud ile geliştirilmiş mikroservis mimarili
 dijital bankacılık platformu simülasyonu.
 
 ## Mimari
-
+ 
 Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Discovery) → İlgili Mikroservis
 
 ```mermaid
@@ -69,9 +69,9 @@ mikroservisi hep birlikte, doğru sırayla başlatır — IntelliJ veya
 Maven kurmaya gerek kalmadan. `--build` bayrağı, ilk çalıştırmada
 image'ların Dockerfile'lardan sıfırdan inşa edilmesini sağlar; sonraki
 çalıştırmalarda `--build` olmadan da (`docker compose up -d`) kullanılabilir.
-Altyapı servisleri (Postgres, Redis, Zookeeper, Kafka) için healthcheck
-tanımlıdır - uygulama servisleri, bu servisler sadece "başlamış" değil
-gerçekten "hazır" (healthy) olana kadar bekler.
+Altyapı servisleri (Postgres, Redis, Zookeeper, Kafka, Eureka Server)
+için healthcheck tanımlıdır - uygulama servisleri, bu servisler sadece
+"başlamış" değil gerçekten "hazır" (healthy) olana kadar bekler.
 
 **Güvenlik notu:** Sadece api-gateway'in portu (8080) dışarıya açıktır.
 Diğer altı mikroservis yalnızca Docker network'ü içinden erişilebilir —
@@ -144,10 +144,14 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 
 ## Dayanıklılık ve Performans
 
-- **Circuit Breaker**: Account Service'e yapılan çağrılar, açıkça
-  isimlendirilmiş (`accountService`) bir Resilience4j Circuit Breaker
-  ile korunur - devre açıldığında (çok fazla art arda hata) çağrı
-  hiç yapılmadan hızlıca reddedilir.
+- **Circuit Breaker**: Account Service'e yapılan çağrılar (Transaction
+  Service içinden) ve Customer Service'e yapılan çağrılar (Account
+  Service içinden, hesap açılırken), her biri açıkça isimlendirilmiş
+  (`accountService`, `customerService`) ayrı birer Resilience4j Circuit
+  Breaker ile korunur - devre açıldığında (çok fazla art arda hata)
+  çağrı hiç yapılmadan hızlıca reddedilir. İş kuralı hataları (4xx,
+  örn. yetersiz bakiye veya müşteri bulunamadı) bu istatistiğe hiç
+  sayılmaz, sadece gerçek altyapı arızaları (5xx/bağlantı sorunu) sayılır.
 - **Retry**: Sadece geçici (5xx/bağlantı) hatalarda, programatik
   `RetryTemplate` ile en fazla 3 kez tekrar deneme yapılır. İş kuralı
   hataları (4xx) hiç tekrar denenmez.
@@ -184,8 +188,8 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 - **Docker Compose**: Tüm sistem (11 container — 4 altyapı + 7
   uygulama), tek bir `docker compose up -d --build` komutuyla, ortak
   bir Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
-  Altyapı servisleri için healthcheck tanımlı, uygulama servisleri
-  bunların gerçekten hazır olmasını bekliyor.
+  Altyapı servisleri (Eureka Server dahil) için healthcheck tanımlı,
+  uygulama servisleri bunların gerçekten hazır olmasını bekliyor.
 - **GitHub Actions (CI)**: Her push'ta, yedi servisin her biri ayrı
   ayrı otomatik olarak derlenip test ediliyor (bkz. yukarıdaki badge).
 
@@ -212,7 +216,12 @@ edilen bulgular doğrultusunda sağlamlaştırma (hardening) çalışmaları
 sürdürülüyor. Gün 1 (hızlı güvenlik düzeltmeleri + yetkilendirme),
 Gün 2 (atomic transfer + idempotency/circuit breaker), Gün 3 (internal
 endpoint koruması, idempotency conflict handling, circuit breaker
-ayarları, optimistic locking) ve Gün 4 (domain validasyonları, Docker
+ayarları, optimistic locking), Gün 4 (domain validasyonları, Docker
 healthcheck'leri, rate limiter düzeltmesi, constructor injection,
 status/rol alanlarının enum'a çevrilmesi, listeleme endpoint'lerine
-sayfalama) tamamlandı (bkz. docs/asama8-notlar.md).
+sayfalama) ve ardından ikinci bir uçtan uca kod incelemesi sonrası ek
+düzeltmeler (circuit breaker'ın iş kuralı hatalarını arıza saymaması,
+veritabanı kimlik bilgilerinin ortam değişkenine taşınması, constructor
+injection tutarlılığının tamamlanması, Eureka Server için Docker
+healthcheck, Account Service → Customer Service çağrısına circuit
+breaker/retry koruması) tamamlandı (bkz. docs/asama8-notlar.md).

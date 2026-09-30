@@ -85,6 +85,15 @@ Breaker (Resilience4j, açıkça `accountService` adıyla) ve Retry
 - Sadece geçici (5xx/bağlantı) hatalar en fazla 3 kez, 500ms arayla
   tekrar denenir. İş kuralı hataları (400/403/404 gibi 4xx) hiç tekrar
   denenmez, çünkü sonuç değişmeyecektir.
+- İş kuralı hataları (`NonRetryableException`), `application.yml`'deki
+  `ignore-exceptions` ayarı sayesinde circuit breaker'ın başarısızlık
+  istatistiğine de hiç sayılmaz - yani sık karşılaşılan normal
+  kullanıcı hataları (örn. art arda "yetersiz bakiye" denemeleri),
+  Account Service gerçekte çökmemişken devrenin yanlışlıkla `OPEN`
+  duruma geçmesine yol açmaz. Gerçek bir kesinti senaryosuyla (art arda
+  12 başarısız transfer isteği) test edildi (bkz.
+  docs/asama8-notlar.md, "Ek Düzeltmeler — İkinci Tur Kod İncelemesi",
+  Madde 1).
 - `RetryTemplate`, `CircuitBreaker.run(...)`'ı sarmaladığı için, tek bir
   kullanıcı isteği circuit breaker'a birden fazla (retry sayısı kadar)
   ayrı "çağrı" olarak yansıyabilir - bu, gerçek kesinti senaryosunda

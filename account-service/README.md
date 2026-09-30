@@ -109,6 +109,22 @@ Gerçek bir bankacılık sisteminde bu, merkez bankası tarafından
 sağlanan resmi kod listeleri ve checksum doğrulaması gerektirir —
 bu proje kapsamında bilinçli olarak basitleştirilmiştir.
 
+## Dayanıklılık (Customer Service Çağrısı)
+Hesap açılırken yapılan Customer Service çağrısı (`checkCustomerExists`),
+`transaction-service`'in Account Service'e yaptığı çağrıyla aynı
+desende bir `CustomerServiceExecutor` üzerinden, açıkça isimlendirilmiş
+(`customerService`) bir Resilience4j Circuit Breaker ve programatik
+`RetryTemplate` (Spring Retry) ile korunur:
+- Customer Service'ten gelen 4xx hatalar (örn. müşteri bulunamadı)
+  `NonRetryableException`'a sarılır - ne tekrar denenir ne circuit
+  breaker istatistiğine sayılır, çünkü sonuç değişmeyecektir.
+- Sadece geçici (5xx/bağlantı) hatalar en fazla 3 kez, 500ms arayla
+  tekrar denenir; devre açıldığında (`OPEN`) çağrı hiç yapılmadan
+  hızlıca reddedilir.
+
+(bkz. docs/asama8-notlar.md, "Ek Düzeltmeler — İkinci Tur Kod
+İncelemesi", Madde 5)
+
 ## Performans (Cache)
 Hesap sorgulama (GET /api/accounts/{id}) sonuçları Redis'te
 cache'lenir. Bakiye değiştiren işlemlerde (deposit/withdraw/transfer)

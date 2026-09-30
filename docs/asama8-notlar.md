@@ -573,3 +573,137 @@ hesaplandığı (`customer-service`: 6 kayıt/3 sayfa, `account-service`:
 Gün 4'ün tüm maddeleri, ilgili unit testlerle birlikte (her madde için
 ayrı commit halinde) tamamlandı ve Docker/Postman ile uçtan uca
 doğrulandı.
+
+
+
+## Ek Düzeltmeler — İkinci Tur Kod İncelemesi
+
+Gün 4'ün tamamlanmasının ardından, tüm proje üzerinde uçtan uca yeni bir
+kod incelemesi yapıldı ve 10 madde tespit edildi. Kritik/orta öncelikli
+5 madde (#1, #2, #3, #5, #8 — inceleme raporundaki orijinal numaralarıyla)
+bu oturumda giderildi. Kalan maddeler (#4 - rate limiter'ın kullanıcı
+bazlı olmaması; #6, #7, #10 - IBAN çakışma ihtimali, email'in büyük/küçük
+harfe duyarlı olması, `JwtAuthenticationFilter`'da `startsWith` kullanımı)
+bilgilendirme amaçlı not edildi, düşük öncelikli/kapsam dışı bırakıldı.
+
+### Madde 1 — Circuit Breaker, İş Kuralı Hatalarını Arıza Saymasın
+
+Resilience4j Circuit Breaker, varsayılan olarak `circuitBreaker.run(...)`
+içinde fırlatılan **her** exception'ı (hem gerçek altyapı arızalarını hem
+de normal iş kuralı hatalarını) başarısızlık istatistiğine sayıyordu.
+`NonRetryableException` (yetersiz bakiye gibi legal 4xx hataları saran)
+bu istatistiğe dahil oluyordu - yani sık karşılaşılan, tamamen normal bir
+kullanıcı hatası (örn. çok sayıda "yetersiz bakiye" denemesi), gerçekte
+Account Service çökmemişken bile devrenin (circuit) yanlışlıkla `OPEN`
+duruma geçmesine yol açabilirdi.
+
+**Yapılan değişiklik**: `transaction-service/application.yml`'deki
+`resilience4j.circuitbreaker.instances.accountService` altına
+`ignore-exceptions: com.banking.transaction.exception.NonRetryableException`
+eklendi - artık sadece gerçek altyapı hataları (5xx, bağlantı sorunu)
+circuit breaker istatistiğine sayılıyor.
+
+**Test ile doğrulandı**: Bilinçli olarak bakiyeyi aşan tutarda, art arda
+12 transfer isteği (PowerShell script ile, her biri benzersiz
+`Idempotency-Key` ile) gönderildi - hepsi doğru şekilde "Yetersiz bakiye"
+hatası döndürdü, hiçbirinde circuit breaker'ın yanlışlıkla devreye girip
+`CallNotPermittedException` fallback mesajı dönmediği teyit edildi.
+
+### Madde 2 — Veritabanı Kimlik Bilgilerinin Ortam Değişkenine Taşınması
+
+`JWT_SECRET` zaten `.env` üzerinden yönetiliyordu, ama veritabanı
+kullanıcı adı/şifresi (`banking_user`/`banking_pass`) hem
+`docker-compose.yml`'de hem her servisin `application.yml`'inde sabit
+(hardcoded) olarak yazılıydı - güvenlik açısından tutarsız bir durumdu.
+
+**Yapılan değişiklik**: `auth-service`, `customer-service`,
+`account-service`, `transaction-service`'in `application.yml`'lerinde
+`username`/`password` alanları `${DB_USERNAME:banking_user}` /
+`${DB_PASSWORD:banking_pass}` şeklinde ortam değişkenine çevrildi (yerel
+geliştirme için eski değerler varsayılan olarak korundu). `docker-compose.yml`'de
+Postgres servisinin `POSTGRES_USER`/`POSTGRES_PASSWORD`'ü ve dört uygulama
+servisinin `DB_USERNAME`/`DB_PASSWORD` ortam değişkenleri `${DB_USERNAME:-banking_user}`
+/ `${DB_PASSWORD:-banking_pass}` olarak `.env`'den okunacak şekilde
+güncellendi. `.env.example`'a `DB_USERNAME`/`DB_PASSWORD` örnek satırları
+eklendi.
+
+**Not**: Postgres'in resmi Docker image'ı, `POSTGRES_USER`/`POSTGRES_PASSWORD`
+değerlerini sadece veri dizini (`postgres-data` volume'u) ilk kez
+oluşturulduğunda uyguluyor. Mevcut volume zaten eski değerlerle
+oluşturulmuş olduğundan (ve yeni varsayılan değerler eskileriyle aynı
+olduğundan) bir volume sıfırlamasına gerek kalmadı; ileride gerçekten
+farklı bir şifreye geçilmek istenirse, ya volume silinip yeniden
+oluşturulmalı ya da `ALTER USER` ile elle değiştirilmeli.
+
+**Test ile doğrulandı**: `docker compose up -d --build` ile tüm sistem
+yeniden build edildi, 4 servis de crash olmadan ayağa kalktı. Postman
+üzerinden uçtan uca (register → login → customer oluşturma/listeleme →
+hesap açma/yatırma → transfer) tüm akış, dört servisin de yeni ortam
+değişkenleriyle Postgres'e sorunsuz bağlandığı doğrulanarak test edildi.
+
+### Madde 3 — Constructor Injection Tutarlılığı
+
+Gün 4 Madde 4'te çoğu servis constructor injection'a çevrilmişti, ama
+üç sınıf gözden kaçmıştı: `api-gateway`'deki `JwtAuthenticationFilter`
+(`@Autowired` alan injection) ve `JwtValidator` (`@Value` alan
+injection), ve `transaction-service`'teki `TransactionEventProducer`
+(`@Autowired` alan injection).
+
+**Yapılan değişiklik**: Üçü de aynı desenle `private final` alan +
+constructor parametresine çevrildi. `JwtValidator`'da `@Value("${jwt.secret}")`
+artık constructor parametresi üzerinde.
+
+**Test ile doğrulandı**: `api-gateway` ve `transaction-service` Docker'da
+yeniden build edildi, JWT doğrulama zinciri (login + korumalı endpoint
+erişimi) ve bir transfer isteği (Kafka event yayınının hâlâ çalıştığını
+kanıtlamak için) uçtan uca test edildi, regresyon yok.
+
+### Madde 4 — Eureka Server İçin Docker Healthcheck
+
+Gün 4 Madde 2'de altyapı servislerine (Postgres, Redis, Kafka, Zookeeper)
+healthcheck eklenmişti, ama `eureka-server`'a eklenmemişti - ona bağımlı
+6 servis sadece `condition: service_started` kullanıyordu, yani Eureka
+container'ı "başladı" sayılır sayılmaz diğer servisler başlamaya
+çalışıyordu, embedded Tomcat tam hazır olmasa bile.
+
+**Yapılan değişiklik**: `eureka-server`'da Actuator bağımlılığı ve
+`curl`/`wget` olmadığı için, bash'in `/dev/tcp` özelliğiyle basit bir
+port-erişilebilirlik kontrolü eklendi
+(`bash -c 'echo > /dev/tcp/localhost/8761'`) - ekstra bağımlılık veya
+imaj değişikliği gerektirmeyen, hafif bir çözüm. Bağımlı 6 servisin
+(`api-gateway`, `auth-service`, `customer-service`, `account-service`,
+`transaction-service`, `notification-service`) `depends_on` şartları
+`condition: service_healthy`'ye çevrildi.
+
+**Test ile doğrulandı**: `docker compose down` + `up -d --build` ile
+sıfırdan test edildi - `banking-eureka-server` `(healthy)` durumuna
+geçene kadar diğer servislerin beklediği gözlemlendi.
+
+### Madde 5 — Account Service → Customer Service Çağrısına Dayanıklılık
+
+`account-service`'in `openAccount()` akışında `customer-service`'e yapılan
+Feign çağrısı (`checkCustomerExists`), `transaction-service`'in Account
+Service'e yaptığı çağrının aksine, hiçbir circuit breaker/retry koruması
+olmadan doğrudan yapılıyordu - Customer Service geçici olarak yavaşlarsa/
+kesintiye uğrarsa, Account Service de hemen hata verirdi.
+
+**Yapılan değişiklik**: Madde 1'deki (Gün 2 Konu B) desenin birebir aynısı
+uygulandı: yeni bir `CustomerServiceExecutor` sınıfı (`RetryTemplate` +
+`CircuitBreakerFactory`, açıkça `customerService` adıyla) ve
+`NonRetryableException` eklendi. 4xx hatalar (örn. müşteri bulunamadı)
+retry edilmiyor ve circuit breaker istatistiğine sayılmıyor
+(`ignore-exceptions`); 5xx/bağlantı hataları en fazla 3 kez tekrar
+deneniyor. `AccountService.openAccount()`, bu executor üzerinden çağrı
+yapacak şekilde güncellendi; `404 Not Found` davranışı (müşteri
+bulunamadığında) korunuyor.
+
+**Test ile doğrulandı**: Geçerli bir `customerId` ile hesap açma `200 OK`
+döndü (executor üzerinden geçen çağrı sorunsuz); olmayan bir `customerId`
+ile `404 Not Found` + "Belirtilen müşteri bulunamadı" alındı (hata
+sınıflandırmasının eskisiyle birebir aynı davrandığı doğrulandı). `mvnw test`
+11/11 geçti.
+
+---
+
+Bu ek düzeltmelerin tamamı, ilgili maddeler için ayrı commit halinde
+tamamlandı ve Docker/Postman ile uçtan uca doğrulandı.
