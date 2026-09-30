@@ -5,10 +5,12 @@ import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.service.AccountService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.banking.account.dto.AmountRequest;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/accounts")
@@ -36,10 +38,11 @@ public class AccountController {
     }
 
     @GetMapping
-    public ResponseEntity<List<AccountResponse>> getAllAccounts(
+    public ResponseEntity<Page<AccountResponse>> getAllAccounts(
             @RequestHeader("X-User-Id") Long userId,
-            @RequestHeader("X-User-Role") String role) {
-        return ResponseEntity.ok(accountService.getAllAccounts(userId, role));
+            @RequestHeader("X-User-Role") String role,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(accountService.getAllAccounts(userId, role, pageable));
     }
 
     @PostMapping("/{id}/deposit")

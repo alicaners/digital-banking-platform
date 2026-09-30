@@ -15,10 +15,11 @@ import feign.FeignException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
-import java.util.List;
 
 @Service
 public class AccountService {
@@ -64,19 +65,14 @@ public class AccountService {
         return toResponse(account);
     }
 
-    public List<AccountResponse> getAllAccounts(Long userId, String role) {
+    public Page<AccountResponse> getAllAccounts(Long userId, String role, Pageable pageable) {
         if (Role.valueOf(role) == Role.ADMIN) {
-            return accountRepository.findAll()
-                    .stream()
-                    .map(this::toResponse)
-                    .toList();
+            return accountRepository.findAll(pageable)
+                    .map(this::toResponse);
         }
 
-        return accountRepository.findAll()
-                .stream()
-                .filter(account -> account.getUserId().equals(userId))
-                .map(this::toResponse)
-                .toList();
+        return accountRepository.findByUserId(userId, pageable)
+                .map(this::toResponse);
     }
 
     @CacheEvict(value = "accounts", key = "#accountId")
