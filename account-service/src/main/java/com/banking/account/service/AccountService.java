@@ -6,6 +6,7 @@ import com.banking.account.dto.AccountResponse;
 import com.banking.account.dto.InternalTransferRequest;
 import com.banking.account.entity.Account;
 import com.banking.account.entity.AccountStatus;
+import com.banking.account.entity.Role;
 import com.banking.account.exception.AccessDeniedException;
 import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.repository.AccountRepository;
@@ -64,7 +65,7 @@ public class AccountService {
     }
 
     public List<AccountResponse> getAllAccounts(Long userId, String role) {
-        if ("ADMIN".equals(role)) {
+        if (Role.valueOf(role) == Role.ADMIN) {
             return accountRepository.findAll()
                     .stream()
                     .map(this::toResponse)
@@ -161,7 +162,7 @@ public class AccountService {
     }
 
     private void checkReadAccess(Account account, Long userId, String role) {
-        if ("ADMIN".equals(role)) {
+        if (Role.valueOf(role) == Role.ADMIN) {
             return;
         }
         if (!account.getUserId().equals(userId)) {
