@@ -3,6 +3,7 @@ package com.banking.auth.service;
 import com.banking.auth.dto.AuthResponse;
 import com.banking.auth.dto.LoginRequest;
 import com.banking.auth.dto.RegisterRequest;
+import com.banking.auth.entity.Role;
 import com.banking.auth.entity.User;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.security.JwtTokenProvider;
@@ -38,7 +39,7 @@ public class AuthService {
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole("CUSTOMER");
+        user.setRole(Role.CUSTOMER);
 
         userRepository.save(user);
 
@@ -54,7 +55,7 @@ public class AuthService {
             throw new IllegalArgumentException("Kullanıcı adı veya şifre hatalı");
         }
 
-        String token = jwtTokenProvider.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String token = jwtTokenProvider.generateToken(user.getId(), user.getUsername(), user.getRole().name());
 
         return new AuthResponse(user.getUsername(), user.getEmail(), "Giriş başarılı", token);
     }

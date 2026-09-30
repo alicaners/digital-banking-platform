@@ -2,6 +2,7 @@ package com.banking.auth.service;
 
 import com.banking.auth.dto.AuthResponse;
 import com.banking.auth.dto.RegisterRequest;
+import com.banking.auth.entity.Role;
 import com.banking.auth.entity.User;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.security.JwtTokenProvider;
@@ -53,7 +54,7 @@ class AuthServiceTest {
         existingUser.setUsername("testuser");
         existingUser.setEmail("test@example.com");
         existingUser.setPassword("hashedPassword");
-        existingUser.setRole("CUSTOMER");
+        existingUser.setRole(Role.CUSTOMER);
     }
 
     @Test
