@@ -1,6 +1,5 @@
 package com.banking.gateway.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -16,8 +15,11 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
-    @Autowired
-    private JwtValidator jwtValidator;
+    private final JwtValidator jwtValidator;
+
+    public JwtAuthenticationFilter(JwtValidator jwtValidator) {
+        this.jwtValidator = jwtValidator;
+    }
 
     private final List<String> openEndpoints = List.of(
             "/api/auth/register",

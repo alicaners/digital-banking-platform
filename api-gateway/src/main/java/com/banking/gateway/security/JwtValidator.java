@@ -11,8 +11,11 @@ import java.security.Key;
 @Component
 public class JwtValidator {
 
-    @Value("${jwt.secret}")
-    private String jwtSecret;
+    private final String jwtSecret;
+
+    public JwtValidator(@Value("${jwt.secret}") String jwtSecret) {
+        this.jwtSecret = jwtSecret;
+    }
 
     private Key getSigningKey() {
         byte[] keyBytes = jwtSecret.getBytes();
