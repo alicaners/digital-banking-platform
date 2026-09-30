@@ -6,6 +6,7 @@ import com.banking.transaction.dto.InternalTransferRequest;
 import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
+import com.banking.transaction.entity.TransactionStatus;
 import com.banking.transaction.event.TransactionEvent;
 import com.banking.transaction.exception.IdempotencyConflictException;
 import com.banking.transaction.exception.NonRetryableException;
@@ -79,12 +80,12 @@ public class TransactionService {
                     () -> accountServiceClient.transfer(transferRequest, userId)
             );
 
-            transaction.setStatus("COMPLETED");
+            transaction.setStatus(TransactionStatus.COMPLETED);
 
         } catch (FeignException e) {
 
             transaction.setFailureReason(extractErrorMessage(e));
-            transaction.setStatus("FAILED");
+            transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (NonRetryableException e) {
 
@@ -93,12 +94,12 @@ public class TransactionService {
                             ? extractErrorMessage(fe)
                             : e.getMessage()
             );
-            transaction.setStatus("FAILED");
+            transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (CallNotPermittedException e) {
 
             transaction.setFailureReason("Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin");
-            transaction.setStatus("FAILED");
+            transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (RuntimeException e) {
 
@@ -107,12 +108,12 @@ public class TransactionService {
                             ? e.getMessage()
                             : "Hesap servisi şu anda kullanılamıyor"
             );
-            transaction.setStatus("FAILED");
+            transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (Exception e) {
 
             transaction.setFailureReason("Beklenmeyen bir hata oluştu: " + e.getMessage());
-            transaction.setStatus("FAILED");
+            transaction.setStatus(TransactionStatus.FAILED);
         }
 
         try {
@@ -134,7 +135,7 @@ public class TransactionService {
                     transaction.getSenderAccountId(),
                     transaction.getReceiverAccountId(),
                     transaction.getAmount(),
-                    transaction.getStatus()
+                    transaction.getStatus().name()
             ));
         } catch (Exception e) {
             log.error("Transaction id={} için Kafka event yayınlanamadı, işlem DB'de kayıtlı ama bildirim gitmedi: {}",

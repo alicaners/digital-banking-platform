@@ -1,5 +1,7 @@
 package com.banking.transaction.dto;
 
+import com.banking.transaction.entity.TransactionStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -9,12 +11,12 @@ public class TransactionResponse {
     private Long senderAccountId;
     private Long receiverAccountId;
     private BigDecimal amount;
-    private String status;
+    private TransactionStatus status;
     private LocalDateTime createdAt;
     private String failureReason;
 
     public TransactionResponse(Long id, Long senderAccountId, Long receiverAccountId,
-                               BigDecimal amount, String status, LocalDateTime createdAt) {
+                               BigDecimal amount, TransactionStatus status, LocalDateTime createdAt) {
         this.id = id;
         this.senderAccountId = senderAccountId;
         this.receiverAccountId = receiverAccountId;
@@ -27,7 +29,7 @@ public class TransactionResponse {
     public Long getSenderAccountId() { return senderAccountId; }
     public Long getReceiverAccountId() { return receiverAccountId; }
     public BigDecimal getAmount() { return amount; }
-    public String getStatus() { return status; }
+    public TransactionStatus getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 
     public String getFailureReason() { return failureReason; }

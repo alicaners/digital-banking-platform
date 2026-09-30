@@ -6,6 +6,7 @@ import com.banking.transaction.dto.InternalTransferRequest;
 import com.banking.transaction.dto.TransactionResponse;
 import com.banking.transaction.dto.TransferRequest;
 import com.banking.transaction.entity.Transaction;
+import com.banking.transaction.entity.TransactionStatus;
 import com.banking.transaction.event.TransactionEvent;
 import com.banking.transaction.exception.IdempotencyConflictException;
 import com.banking.transaction.executor.AccountServiceExecutor;
@@ -76,7 +77,7 @@ class TransactionServiceTest {
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(TransactionStatus.COMPLETED, response.getStatus());
         assertNull(response.getFailureReason());
         verify(eventProducer, times(1)).publish(any(TransactionEvent.class));
     }
@@ -91,7 +92,7 @@ class TransactionServiceTest {
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("FAILED", response.getStatus());
+        assertEquals(TransactionStatus.FAILED, response.getStatus());
         assertEquals("Yetersiz bakiye", response.getFailureReason());
     }
 
@@ -122,7 +123,7 @@ class TransactionServiceTest {
         existing.setSenderAccountId(1L);
         existing.setReceiverAccountId(2L);
         existing.setAmount(new BigDecimal("100.00"));
-        existing.setStatus("COMPLETED");
+        existing.setStatus(TransactionStatus.COMPLETED);
         existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
         existing.setCreatedAt(LocalDateTime.now());
 
@@ -131,7 +132,7 @@ class TransactionServiceTest {
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(TransactionStatus.COMPLETED, response.getStatus());
         assertEquals(99L, response.getId());
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
         verify(transactionRepository, never()).save(any(Transaction.class));
@@ -153,7 +154,7 @@ class TransactionServiceTest {
         // OTHER_USER_ID, TEST_USER_ID'nin eski kaydını (id=99) GÖRMEMELİ,
         // kendi yeni transferini gerçekleştirmeli.
         assertNotEquals(99L, response.getId());
-        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(TransactionStatus.COMPLETED, response.getStatus());
         verify(accountServiceClient, times(1)).transfer(any(InternalTransferRequest.class), eq(OTHER_USER_ID));
     }
 
@@ -167,7 +168,7 @@ class TransactionServiceTest {
         existing.setSenderAccountId(1L);
         existing.setReceiverAccountId(2L);
         existing.setAmount(new BigDecimal("100.00"));
-        existing.setStatus("COMPLETED");
+        existing.setStatus(TransactionStatus.COMPLETED);
         existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
         existing.setCreatedAt(LocalDateTime.now());
 
@@ -177,7 +178,7 @@ class TransactionServiceTest {
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
         assertEquals(99L, response.getId());
-        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(TransactionStatus.COMPLETED, response.getStatus());
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
     }
 
@@ -191,7 +192,7 @@ class TransactionServiceTest {
         existing.setSenderAccountId(1L);
         existing.setReceiverAccountId(2L);
         existing.setAmount(new BigDecimal("50.00"));
-        existing.setStatus("COMPLETED");
+        existing.setStatus(TransactionStatus.COMPLETED);
         existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
         existing.setCreatedAt(LocalDateTime.now());
 
@@ -219,7 +220,7 @@ class TransactionServiceTest {
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(TransactionStatus.COMPLETED, response.getStatus());
         verify(transactionRepository, times(1)).save(any(Transaction.class));
         verify(eventProducer, times(1)).publish(any(TransactionEvent.class));
     }
@@ -233,7 +234,7 @@ class TransactionServiceTest {
         existing.setSenderAccountId(1L);
         existing.setReceiverAccountId(2L);
         existing.setAmount(new BigDecimal("100.00"));
-        existing.setStatus("FAILED");
+        existing.setStatus(TransactionStatus.FAILED);
         existing.setFailureReason("Yetersiz bakiye");
         existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
         existing.setCreatedAt(LocalDateTime.now());
@@ -243,7 +244,7 @@ class TransactionServiceTest {
 
         TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
 
-        assertEquals("FAILED", response.getStatus());
+        assertEquals(TransactionStatus.FAILED, response.getStatus());
         assertEquals("Yetersiz bakiye", response.getFailureReason());
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
     }
