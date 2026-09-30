@@ -9,9 +9,13 @@ mvnw spring-boot:run
 8083
 
 ## Endpoint'ler (Gateway üzerinden JWT token gerektirir)
-POST /api/accounts - Yeni hesap aç
+POST /api/accounts - Yeni hesap aç (verilen `customerId`'nin Customer
+Service'te gerçekten var olduğu doğrulanır; yoksa `404 Not Found`
+döner, bkz. "Teknik Notlar")
 GET /api/accounts/{id} - Hesap bilgisi ve bakiye sorgula (sahiplik kontrolü var)
-GET /api/accounts - Kendi hesaplarını listele (ADMIN tüm hesapları görür)
+GET /api/accounts - Kendi hesaplarını sayfalı şekilde listele (ADMIN tüm
+hesapları görür). Query parametreleri: `?page=0&size=20&sort=id,desc`
+(hiçbiri verilmezse varsayılan: sayfa 0, boyut 20) - bkz. "Sayfalama"
 POST /api/accounts/{id}/deposit - Hesaba para yatır (sahiplik kontrolü yok - kasıtlı)
 POST /api/accounts/{id}/withdraw - Hesaptan para çek (sahiplik kontrolü var)
 POST /api/accounts/internal/transfer - İki hesap arasında atomic transfer
@@ -41,6 +45,14 @@ JWT'den çıkarıp `X-User-Id` header'ıyla ilettiği kimlik). Kurallar:
 Yetkisiz bir işlem denemesi `403 Forbidden` döner (`AccessDeniedException`).
 Detaylı gerekçe için bkz. docs/asama8-notlar.md, "Gün 1 — Konu B".
 
+Rol kontrolü (`Role.valueOf(role) == Role.ADMIN`), Gateway'in `X-User-Role`
+header'ıyla ilettiği string'i tip güvenli bir `Role` enum'una (`CUSTOMER`,
+`ADMIN`) çevirerek yapılır. Bilinçli bir tasarım kararı: `role` header'ı
+Gateway'in kendi doğruladığı JWT'den türediği için normalde her zaman
+geçerli bir değerdir; beklenmedik bir değer gelirse (bug/veri bütünlüğü
+sorunu) sistem sessizce "yetkisiz" varsaymak yerine `400 Bad Request`
+ile açıkça hata verir (bkz. docs/asama8-notlar.md, "Gün 4 — Madde 5.5").
+
 ## Atomic Transfer (Aşama 8'de eklendi)
 `internal/transfer` endpoint'i, sender ve receiver hesapları arasındaki
 para transferini tek bir `@Transactional` veritabanı işlemi içinde
@@ -50,7 +62,30 @@ Transaction Service'te bir Saga pattern'iyle yönetiliyordu; aynı
 veritabanına sahip olmaları nedeniyle bu basitleştirmeye gidildi
 (bkz. docs/asama8-notlar.md, "Gün 2 — Konu A").
 
+## Sayfalama
+`GET /api/accounts`, DB'deki tüm kayıtları tek seferde dönmek yerine
+Spring Data'nın `Pageable`/`Page` desteğiyle sayfalanmış sonuç döner.
+CUSTOMER rolü için filtreleme artık DB seviyesinde (`findByUserId`)
+yapılır, önceden olduğu gibi tüm kayıtları çekip Java tarafında
+filtrelemez - bu hem performans hem veri transferi açısından daha
+verimlidir (bkz. docs/asama8-notlar.md, "Gün 4 — Madde 6").
+
 ## Teknik Notlar
+
+**Müşteri varlık kontrolü**: Hesap açılırken (`POST /api/accounts`),
+verilen `customerId`'nin Customer Service'te gerçekten kayıtlı olup
+olmadığı, Feign Client (`CustomerServiceClient`) ile senkron olarak
+kontrol edilir. Müşteri bulunamazsa `404 Not Found` döner. Genel
+olarak "kayıt bulunamadı" durumları (`ResourceNotFoundException`,
+hesap/gönderen/alıcı/müşteri) `404`, gerçek iş kuralı hataları
+(yetersiz bakiye, negatif tutar vb.) `400 Bad Request` olarak ayrıştırılmıştır
+(bkz. docs/asama8-notlar.md, "Gün 4 — Madde 1").
+
+**Hesap durumu**: `Account.status` alanı, düz bir `String` yerine
+`AccountStatus` enum'u (şu an için sadece `ACTIVE` değerine sahip -
+kod başka bir değer üretmiyor) - veritabanında yine okunabilir string
+olarak saklanır, Java tarafında yazım hatasına kapalıdır (bkz.
+docs/asama8-notlar.md, "Gün 4 — Madde 5.2").
 
 **Para miktarları**: Tüm bakiye alanları `BigDecimal` ile tutulur,
 `double`/`float` kullanılmaz — ondalık yuvarlama hatalarının önüne

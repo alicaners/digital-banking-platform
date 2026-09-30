@@ -47,6 +47,12 @@ Tüm isteklere (JWT kontrolünden bile önce) global bir istek sınırı
 uygulanır: 10 saniyede en fazla 10 istek kabul edilir, aşımda
 429 Too Many Requests döner.
 
+Bu sınırlama `application.yml`'deki `resilience4j.ratelimiter.instances.globalRateLimiter`
+ayarlarından okunur - `RateLimiterFilter`, `RateLimiterRegistry` üzerinden
+bu adla tanımlı gerçek bir `RateLimiter` nesnesi kullanır. (Önceden bu
+yml ayarları tanımlıydı ama filtre koduyla hiç bağlanmamıştı, yani
+sessizce hiç uygulanmıyordu - bkz. docs/asama8-notlar.md, "Gün 4 — Madde 3".)
+
 ## Route'lar
 /api/auth/**          -> auth-service
 /api/customers/**     -> customer-service

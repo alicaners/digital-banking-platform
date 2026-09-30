@@ -49,6 +49,13 @@ senaryomuzda böyle bir dağıtıklık olmadığı için kaldırıldı.
   - aynı `Idempotency-Key` ile tekrar istek geldiğinde bile doğru
     şekilde döner (bkz. docs/asama8-notlar.md, "Gün 3 — Madde 7.2").
 
+`status` alanı artık düz bir `String` değil, `TransactionStatus`
+enum'u (`PENDING`, `COMPLETED`, `FAILED`) - veritabanında
+`@Enumerated(EnumType.STRING)` ile yine okunabilir string olarak
+saklanıyor, ama Java tarafında yazım hatasına kapalı, derleyici
+tarafından denetlenen bir tip (bkz. docs/asama8-notlar.md,
+"Gün 4 — Madde 5.1").
+
 ## Validasyonlar
 - Gönderen ve alıcı hesap aynı olamaz (`senderAccountId == receiverAccountId`
   ise `400 Bad Request`, bkz. "Gün 3 — Madde 4").
@@ -109,12 +116,30 @@ olmadığı için, başarılı bir transfer bile Kafka kesintisinde client'a
 yanlışlıkla `500` olarak dönebiliyordu (bkz. docs/asama8-notlar.md,
 "Gün 3 — Madde 7.1").
 
+`TransactionEvent`'in `status` alanı, `notification-service`'deki ayrı
+kopyasıyla uyumluluk için kasıtlı olarak `String` kaldı - yayın
+sırasında `transaction.getStatus().name()` ile `TransactionStatus`
+enum'undan string'e çevriliyor (bkz. docs/asama8-notlar.md,
+"Gün 4 — Madde 5.1").
+
 ## Eşzamanlılık (Optimistic Locking)
 Account Service tarafında, aynı hesabın eşzamanlı güncellenmeye
 çalışılması durumunda oluşan çakışmalar (`OptimisticLockException`),
 artık çirkin bir `500` yerine anlaşılır bir `409 Conflict` mesajı
 olarak bu servise (ve dolayısıyla client'a) yansır (bkz.
 docs/asama8-notlar.md, "Gün 3 — Madde 6").
+
+## Test Ortamı Notu
+Türkçe işletim sistemi locale'inde çalışan bir JVM'de, embedded Kafka
+testi (`TransactionServiceApplicationTests`) Kafka'nın kendi iç kodundaki
+bir `toUpperCase()` çağrısı yüzünden başarısız olabiliyordu (Türkçe
+locale'de "i" büyütüldüğünde noktalı "İ" üretiliyor, Kafka'nın beklediği
+`CLASSIC` yerine geçersiz bir `CLASSİC` enum değeri oluşuyordu). Bu,
+`pom.xml`'deki `maven-surefire-plugin` yapılandırmasına eklenen
+`-Duser.language=en -Duser.country=US` `argLine`'ı ile çözüldü - bu
+sadece **test JVM'inin** case-conversion kurallarını İngilizce'ye
+zorluyor, uygulamanın kendi Türkçe davranışını/metinlerini etkilemiyor
+(bkz. docs/asama8-notlar.md, "Gün 4 — Madde 4").
 
 ## Test
 Unit testler (Mockito), transfer akışının tüm senaryolarını kapsar:

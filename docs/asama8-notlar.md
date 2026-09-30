@@ -371,3 +371,205 @@ doğru geldiği (`null` değil) doğrulandı.
 
 Gün 3'ün tüm maddeleri, ilgili unit testlerle birlikte (her madde için
 ayrı commit halinde) tamamlandı ve CI'da doğrulandı.
+
+
+## Gün 4 — Kod Kalitesi, Dayanıklılık ve Sayfalama
+
+Gün 3'te tespit edilen eksikliklerin giderilmesinin ardından, bu gün
+planlı altı maddelik bir "hardening" (sağlamlaştırma) çalışması yapıldı:
+domain validasyonları, Docker healthcheck'leri, rate limiter
+yapılandırması, constructor injection'a geçiş, magic string'lerin
+enum'a çevrilmesi ve listeleme endpoint'lerine sayfalama eklenmesi.
+
+### Madde 1 — Domain Validasyonları
+
+Account Service'de `openAccount()` çağrısı, verilen `customerId`'nin
+gerçekten var olup olmadığını hiç kontrol etmiyordu - olmayan bir
+müşteri ID'siyle de hesap açılabiliyordu. Ayrıca "kayıt bulunamadı"
+durumları genel `IllegalArgumentException` ile karşılanıyordu, bu da
+yanlış bir HTTP status'e (400) yol açıyordu; doğrusu 404 Not Found'du.
+
+**Yapılan değişiklikler:**
+
+1. Account Service'e, Customer Service'i Feign ile çağıran
+   `CustomerServiceClient` eklendi (`GET /api/customers/internal/{id}`).
+   Customer Service'e, sadece varlık kontrolü yapan yeni bir
+   `checkCustomerExists` endpoint'i eklendi.
+2. `openAccount()`, hesap açılmadan önce bu kontrolü yapıyor; müşteri
+   yoksa yeni eklenen `ResourceNotFoundException` fırlatılıyor.
+3. Ayrı bir `ResourceNotFoundException` sınıfı oluşturuldu,
+   `GlobalExceptionHandler`'a `404 Not Found` döndüren bir handler
+   eklendi. "Kayıt bulunamadı" tipindeki tüm durumlar (hesap, gönderen,
+   alıcı bulunamadı vb. - toplam 5 yer) `IllegalArgumentException`'dan
+   bu yeni exception'a çevrildi; gerçek iş kuralı hataları (yetersiz
+   bakiye, negatif tutar vb.) `IllegalArgumentException` (400) olarak
+   kaldı.
+
+**Karşılaşılan sorun**: `AccountServiceIntegrationTest`, exception tipi
+değişikliği sonrası `ApplicationContext` yüklenirken başarısız oldu.
+Kök neden araştırması iki farklı, birbiriyle ilgisiz sorunu ortaya
+çıkardı: (1) `src/test/resources/application.yml`'de elle yazılmış
+`driver-class-name: org.h2.Driver`, Testcontainers'ın gerçek Postgres
+bağlantı adresiyle çakışıyordu - `@DynamicPropertySource`'a
+`driver-class-name` override'ı eklenerek düzeltildi. (2) Yeni eklenen
+gerçek `CustomerServiceClient`, tam Spring context'inde Eureka/Customer
+Service olmadan çağrılmaya çalışılıyordu - `@MockBean` ile mock'lanarak
+düzeltildi. İkisi de Madde 1'in kendisiyle ilgisizdi, ayrı "bonus fix"
+commit'leri olarak düzeltildi.
+
+**Test ile doğrulandı**: Var olmayan bir `customerId` ile hesap açma
+denemesi `404 Not Found` döndürdü. Tüm unit ve integration testler
+(11/11) geçti.
+
+### Madde 2 — Docker Healthcheck'leri
+
+`docker-compose.yml`'de altyapı servislerinin (Postgres, Redis,
+Zookeeper, Kafka) sağlık durumu kontrol edilmiyordu; uygulama servisleri
+bu servislerin sadece **başlamış** (started) olmasını bekliyordu, gerçekten
+**hazır** (healthy - örn. Postgres'in bağlantı kabul etmeye başlamış)
+olmasını değil. Bu, özellikle ilk `docker compose up` çalıştırmasında,
+uygulama servislerinin arka planındaki veritabanı henüz hazır olmadan
+başlayıp bağlantı hatası vermesine yol açabiliyordu.
+
+**Yapılan değişiklik**: Postgres (`pg_isready`), Redis (`redis-cli ping`),
+Zookeeper ve Kafka (Confluent'in `cub` - Confluent Utility Belt - aracı)
+için `healthcheck` blokları eklendi. Tüm uygulama servislerinin
+`depends_on` tanımları `condition: service_started`'tan
+`condition: service_healthy`'ye çevrildi. Ayrıca artık kullanılmayan
+`version: '3.8'` satırı kaldırıldı.
+
+**Test ile doğrulandı**: `docker compose up -d` sonrası `docker ps`
+çıktısında altyapı servislerinin `(healthy)` etiketiyle göründüğü,
+uygulama servislerinin bu servisler hazır olana kadar beklediği
+gözlemlendi.
+
+### Madde 3 — Rate Limiter'ın application.yml'den Okunması
+
+API Gateway'deki `RateLimiterFilter`, `application.yml`'de tanımlı
+`resilience4j.ratelimiter.instances.globalRateLimiter` ayarlarını
+(limit, yenileme süresi vb.) hiç okumuyordu - filtre, bu yapılandırmadan
+bağımsız çalışıyordu, yani yml'deki değerler sessizce hiç uygulanmıyordu.
+
+**Yapılan değişiklik**: `RateLimiterFilter`, `RateLimiterRegistry`'yi
+constructor injection ile alacak, `rateLimiterRegistry.rateLimiter("globalRateLimiter")`
+ile yml'deki `globalRateLimiter` konfigürasyonuna bağlı gerçek bir
+`RateLimiter` nesnesi üretecek şekilde güncellendi. `acquirePermission()`
+`false` dönerse `429 Too Many Requests` döndürülüyor.
+
+**Test ile doğrulandı**: `application.yml`'deki `limit-for-period: 10`
+ayarıyla art arda istekler gönderildi - ilk birkaç istek `200 OK`
+döndü, limit aşılınca `429 Too Many Requests` alındı, yenileme
+süresinin ardından tekrar `200 OK`'e dönüldü.
+
+### Madde 4 — Constructor Injection'a Geçiş
+
+Tüm servislerdeki controller/service sınıfları, alan (field) seviyesinde
+`@Autowired` kullanıyordu. Bu, test edilebilirliği zorlaştıran ve Spring
+ekosisteminde artık önerilmeyen bir pattern - constructor injection,
+bağımlılıkların `final` ve zorunlu olmasını garanti eder, dairesel
+bağımlılıkları derleme zamanında yakalar ve mock'lamayı kolaylaştırır.
+
+**Yapılan değişiklik**: Beş servisteki (customer, account, auth,
+transaction servisleri + auth-service'in `JwtTokenProvider`'ı) tüm
+`@Autowired` alanlar, `private final` alanlar + constructor'a çevrildi.
+Spring, tek constructor'ı olan sınıflarda `@Autowired` annotation'ına
+ihtiyaç duymadan otomatik olarak bu constructor'ı kullanıyor.
+`JwtTokenProvider`'daki `@Value` alan injection'ı da constructor
+parametre injection'ına çevrildi.
+
+**Karşılaşılan sorunlar (üç adet, hepsi ilgisiz "bonus fix")**:
+1. `AccountServiceTest`'te, Madde 1'den kalma bir test hâlâ eski
+   `IllegalArgumentException`'ı bekliyordu - `ResourceNotFoundException`'a
+   güncellendi.
+2. Türkçe işletim sistemi locale'inde çalışan JVM'de, Kafka'nın kendi
+   iç kodundaki `toUpperCase()` çağrısı "İ" (noktalı büyük I) üretip
+   `CLASSİC` gibi geçersiz bir enum değeri oluşturuyor, embedded Kafka
+   testini patlatıyordu. `transaction-service/pom.xml`'e
+   `maven-surefire-plugin` üzerinden `-Duser.language=en -Duser.country=US`
+   argLine'ı eklenerek, sadece test JVM'inin case-conversion kuralları
+   İngilizce'ye zorlandı (uygulamanın kendi Türkçe davranışı/metinleri
+   etkilenmedi, sadece bu üçüncü parti kütüphane hatası bypass edildi).
+3. (Madde 1'in kendi bonus fix'leri - yukarıda anlatıldı.)
+
+**Test ile doğrulandı**: Her servis için `mvnw test` çalıştırıldı, tüm
+testler (account: 11, customer: 1, auth: 7, transaction: 11) geçti.
+
+### Madde 5 — Magic String'lerin Enum'a Çevrilmesi
+
+`status` ve `role` gibi alanlar, tüm serviste `String` olarak tutuluyor
+ve `"ACTIVE"`, `"ADMIN"` gibi düz metin karşılaştırmalarıyla kontrol
+ediliyordu - yazım hatalarına açık, derleyici tarafından denetlenemeyen
+bir yaklaşımdı.
+
+**Madde 5.1 — Transaction Service**: `Transaction.status` alanı
+`String`'den yeni `TransactionStatus` enum'una (`PENDING`, `COMPLETED`,
+`FAILED`) çevrildi, `@Enumerated(EnumType.STRING)` ile DB'de yine
+okunabilir string olarak saklanması sağlandı. Kafka event payload'ı
+(`TransactionEvent.status`) geriye dönük uyumluluk için `String` olarak
+bırakıldı, yayınlarken `transaction.getStatus().name()` kullanıldı.
+
+**Madde 5.2 — Account Service**: `Account.status` alanı yeni
+`AccountStatus` enum'una (sadece `ACTIVE` - kod şu an başka bir değer
+üretmiyor) çevrildi. `transfer()`'daki `"ACTIVE".equals(...)`
+karşılaştırmaları `!= AccountStatus.ACTIVE` şeklinde enum
+karşılaştırmasına çevrildi.
+
+**Madde 5.3 — Auth Service (Role tanımı)**: `User.role` alanı yeni
+`Role` enum'una (`CUSTOMER`, `ADMIN`) çevrildi. `JwtTokenProvider`
+kasıtlı olarak değiştirilmedi - JWT claim'i hâlâ `String`, `AuthService`
+token üretirken `user.getRole().name()` ile enum'u string'e çeviriyor.
+
+**Madde 5.4 ve 5.5 — Customer/Account Service (Role kullanımı)**: Her
+iki serviste de `"ADMIN".equals(role)` karşılaştırmaları
+`Role.valueOf(role) == Role.ADMIN` şeklinde değiştirildi. `role`
+parametresi hâlâ Gateway'den gelen bir `String` header (HTTP
+header'ları her zaman string'dir), ama artık karşılaştırma anında
+enum'a çevrilip tip güvenli şekilde kontrol ediliyor. Bilinçli bir
+tasarım kararı: beklenmedik bir `role` değeri gelirse (`Role.valueOf`
+başarısız olursa) sistem sessizce "yetkisiz" varsaymak yerine `400 Bad
+Request` ile açıkça hata veriyor - `role` header'ı Gateway'in kendi
+doğruladığı JWT'den türediği için, geçersiz bir değer aslında bir
+bug/veri bütünlüğü sorunu işaretidir, sessizce yutulmamalı.
+
+**Test ile doğrulandı**: Her alt madde için ilgili servisin testleri
+çalıştırıldı, Docker'da yeniden build edilip Postman ile uçtan uca
+doğrulandı (enum'ların DB'de string olarak saklandığı, ADMIN/CUSTOMER
+rol ayrımının doğru çalıştığı `psql` sorgularıyla ve gerçek isteklerle
+teyit edildi).
+
+### Madde 6 — Listeleme Endpoint'lerine Sayfalama
+
+`GET /api/customers` ve `GET /api/accounts` endpoint'leri, DB'deki
+**tüm kayıtları** tek seferde dönüyordu; CUSTOMER rolü için filtreleme
+de tüm kayıtları çekip Java tarafında `Stream.filter()` ile yapılıyordu
+- kayıt sayısı arttıkça hem performans hem gereksiz veri transferi
+  sorunu yaratacak bir yaklaşımdı.
+
+**Yapılan değişiklikler:**
+
+1. `CustomerRepository` ve `AccountRepository`'ye, Spring Data JPA'nın
+   otomatik ürettiği `findByUserId(Long userId, Pageable pageable)`
+   metodları eklendi - DB seviyesinde filtrelenmiş ve sayfalanmış sorgu.
+2. `getAllCustomers()`/`getAllAccounts()` servis metodları, `Pageable`
+   parametresi alıp `Page<X>` dönecek şekilde güncellendi. ADMIN dalı
+   `repository.findAll(pageable)`, CUSTOMER dalı yeni
+   `findByUserId(userId, pageable)` kullanıyor - `Stream.filter()`
+   tamamen kaldırıldı.
+3. Controller metodları `@PageableDefault(size = 20) Pageable pageable`
+   parametresi alıyor; istemci `?page=0&size=10&sort=firstName,asc`
+   gibi query parametreleriyle sayfa numarası, boyutu ve sıralama
+   belirleyebiliyor.
+
+**Test ile doğrulandı**: CUSTOMER rolüyle istek atıldığında sadece
+kendi kayıtlarını içeren, doğru sayfalama metadata'sına (`totalElements`,
+`totalPages` vb.) sahip bir `Page` objesi döndüğü doğrulandı. ADMIN
+rolüyle küçük bir `size` (`?page=0&size=2` / `?page=0&size=3`)
+verildiğinde, toplam kayıt/sayfa sayısının ve sayfa içeriğinin doğru
+hesaplandığı (`customer-service`: 6 kayıt/3 sayfa, `account-service`:
+9 kayıt/3 sayfa) teyit edildi.
+
+---
+
+Gün 4'ün tüm maddeleri, ilgili unit testlerle birlikte (her madde için
+ayrı commit halinde) tamamlandı ve Docker/Postman ile uçtan uca
+doğrulandı.

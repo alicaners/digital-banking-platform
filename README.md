@@ -40,8 +40,8 @@ graph TD
 | eureka-server | ✅ Tamamlandı | 8761 | Service Discovery |
 | api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama + Rate Limiting + Merkezi Swagger |
 | auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi (userId/role claim'leriyle) |
-| customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD), ownership tabanlı yetkilendirme |
-| account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, atomic transfer, ownership tabanlı yetkilendirme, Redis cache |
+| customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD), ownership tabanlı yetkilendirme, sayfalama |
+| account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, atomic transfer, ownership tabanlı yetkilendirme, Redis cache, sayfalama |
 | transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Idempotency-Key, Circuit Breaker, Retry |
 | notification-service | ✅ Tamamlandı | 8085 | Kafka ile asenkron bildirim |
 
@@ -69,6 +69,9 @@ mikroservisi hep birlikte, doğru sırayla başlatır — IntelliJ veya
 Maven kurmaya gerek kalmadan. `--build` bayrağı, ilk çalıştırmada
 image'ların Dockerfile'lardan sıfırdan inşa edilmesini sağlar; sonraki
 çalıştırmalarda `--build` olmadan da (`docker compose up -d`) kullanılabilir.
+Altyapı servisleri (Postgres, Redis, Zookeeper, Kafka) için healthcheck
+tanımlıdır - uygulama servisleri, bu servisler sadece "başlamış" değil
+gerçekten "hazır" (healthy) olana kadar bekler.
 
 **Güvenlik notu:** Sadece api-gateway'in portu (8080) dışarıya açıktır.
 Diğer altı mikroservis yalnızca Docker network'ü içinden erişilebilir —
@@ -155,6 +158,10 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
   koruma sağlanır.
 - **Redis Cache**: Sık sorgulanan hesap verileri cache'lenir, bakiye
   değiştiğinde cache otomatik tazelenir.
+- **Sayfalama**: Müşteri ve hesap listeleme endpoint'leri (`GET
+  /api/customers`, `GET /api/accounts`), DB'deki tüm kayıtları tek
+  seferde dönmek yerine sayfalanmış sonuç döner - filtreleme de artık
+  DB seviyesinde yapılıyor.
 
 (bkz. docs/asama5-notlar.md, docs/asama8-notlar.md)
 
@@ -177,10 +184,12 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 - **Docker Compose**: Tüm sistem (11 container — 4 altyapı + 7
   uygulama), tek bir `docker compose up -d --build` komutuyla, ortak
   bir Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
+  Altyapı servisleri için healthcheck tanımlı, uygulama servisleri
+  bunların gerçekten hazır olmasını bekliyor.
 - **GitHub Actions (CI)**: Her push'ta, yedi servisin her biri ayrı
   ayrı otomatik olarak derlenip test ediliyor (bkz. yukarıdaki badge).
 
-(bkz. docs/asama7-notlar.md)
+(bkz. docs/asama7-notlar.md, docs/asama8-notlar.md)
 
 ## Teknolojiler
 
@@ -201,7 +210,9 @@ tam konteynerleştirme ve GitHub Actions ile sürekli entegrasyon (CI).
 Devam eden çalışma: bir güvenlik/mimari incelemesi sonrası tespit
 edilen bulgular doğrultusunda sağlamlaştırma (hardening) çalışmaları
 sürdürülüyor. Gün 1 (hızlı güvenlik düzeltmeleri + yetkilendirme),
-Gün 2 (atomic transfer + idempotency/circuit breaker) ve Gün 3
-(internal endpoint koruması, idempotency conflict handling, circuit
-breaker ayarları, optimistic locking) tamamlandı, Gün 4 sürüyor
-(bkz. docs/asama8-notlar.md).
+Gün 2 (atomic transfer + idempotency/circuit breaker), Gün 3 (internal
+endpoint koruması, idempotency conflict handling, circuit breaker
+ayarları, optimistic locking) ve Gün 4 (domain validasyonları, Docker
+healthcheck'leri, rate limiter düzeltmesi, constructor injection,
+status/rol alanlarının enum'a çevrilmesi, listeleme endpoint'lerine
+sayfalama) tamamlandı (bkz. docs/asama8-notlar.md).

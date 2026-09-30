@@ -26,6 +26,16 @@ servislere iletir - bu, her servisin kendi ownership/yetkilendirme
 kontrolünü yapabilmesini sağlar (bkz. docs/asama8-notlar.md,
 "Gün 1 — Konu B").
 
+`User.role` alanı artık düz bir `String` değil, `Role` enum'u
+(`CUSTOMER`, `ADMIN`) - veritabanında yine okunabilir string olarak
+saklanıyor, Java tarafında yazım hatasına kapalı bir tip. Yeni
+kaydolan her kullanıcı otomatik olarak `CUSTOMER` rolüyle oluşturulur;
+`ADMIN` rolü şu an self-servis bir yolla atanamıyor, DB'de elle
+atanıyor. JWT claim'i (`role`) hâlâ `String` olarak kalıyor - token
+formatı ve bunu okuyan Gateway/diğer servisler etkilenmedi, sadece
+`AuthService` içinde enum'dan string'e (`user.getRole().name()`) çevrim
+yapılıyor (bkz. docs/asama8-notlar.md, "Gün 4 — Madde 5.3").
+
 ## Güvenlik Notu
 
 Aşama 8'de giderildi: `jwt.secret` için kod içinde bir varsayılan
