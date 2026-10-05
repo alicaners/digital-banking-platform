@@ -168,6 +168,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       postgres:
         condition: service_healthy
