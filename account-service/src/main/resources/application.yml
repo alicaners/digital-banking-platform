@@ -49,6 +49,10 @@ resilience4j:
         automatic-transition-from-open-to-half-open-enabled: true
         ignore-exceptions:
           - com.banking.account.exception.NonRetryableException
+  timelimiter:
+    instances:
+      customerService:
+        timeout-duration: 5s
 
 logging:
   pattern:

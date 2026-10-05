@@ -2,12 +2,14 @@ package com.banking.transaction.executor;
 
 import com.banking.transaction.exception.NonRetryableException;
 import feign.FeignException;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.function.Supplier;
 
 @Component
@@ -25,14 +27,35 @@ public class AccountServiceExecutor {
     }
 
     public <T> T execute(Supplier<T> call) {
+        // Resilience4J TimeLimiter çağrıyı başka bir thread'de çalıştırır.
+        // MDC thread'e özel olduğu için correlationId'yi burada (istek thread'inde) kopyalayıp aktarıyoruz.
+        Map<String, String> callerMdc = MDC.getCopyOfContextMap();
+
         return retryTemplate.execute(context ->
-                circuitBreaker.run(() -> callAndClassify(call), throwable -> {
+                circuitBreaker.run(() -> callWithMdc(callerMdc, call), throwable -> {
                     if (throwable instanceof RuntimeException re) {
                         throw re;
                     }
                     throw new RuntimeException("Hesap servisi şu anda kullanılamıyor", throwable);
                 })
         );
+    }
+
+    private <T> T callWithMdc(Map<String, String> callerMdc, Supplier<T> call) {
+        Map<String, String> previousMdc = MDC.getCopyOfContextMap();
+        if (callerMdc != null) {
+            MDC.setContextMap(callerMdc);
+        }
+        try {
+            return callAndClassify(call);
+        } finally {
+            // Havuzdaki thread bir sonraki isteğe başka bir correlationId ile gitmesin
+            if (previousMdc != null) {
+                MDC.setContextMap(previousMdc);
+            } else {
+                MDC.clear();
+            }
+        }
     }
 
     private <T> T callAndClassify(Supplier<T> call) {
