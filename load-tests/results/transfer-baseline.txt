@@ -1,0 +1,47 @@
+INFO[0006] Setup tamam: kullanici=lt1187040835, gonderen hesap=17, alici hesap=18  source=console
+
+
+  █ THRESHOLDS
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{name:transfer}
+    ✓ 'p(95)<500' p(95)=70.3ms
+
+    http_req_failed{name:transfer}
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS
+
+    checks_total.......: 96      1.43053/s
+    checks_succeeded...: 100.00% 96 out of 96
+    checks_failed......: 0.00%   0 out of 96
+
+    ✓ HTTP 200
+    ✓ transfer COMPLETED
+
+    HTTP
+    http_req_duration..............: avg=63.27ms min=41.26ms med=56.05ms max=310.22ms p(90)=71.52ms p(95)=100.99ms
+      { expected_response:true }...: avg=63.27ms min=41.26ms med=56.05ms max=310.22ms p(90)=71.52ms p(95)=100.99ms
+      { name:transfer }............: avg=54.94ms min=41.26ms med=55.24ms max=74.65ms  p(90)=69.12ms p(95)=70.3ms
+    http_req_failed................: 0.00% 0 out of 54
+      { name:transfer }............: 0.00% 0 out of 48
+    http_reqs......................: 54    0.804673/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.25s   min=1.24s   med=1.25s   max=1.27s    p(90)=1.26s   p(95)=1.27s
+    iterations.....................: 48    0.715265/s
+    vus............................: 1     min=0       max=1
+    vus_max........................: 1     min=1       max=1
+
+    NETWORK
+    data_received..................: 16 kB 232 B/s
+    data_sent......................: 24 kB 351 B/s
+
+
+
+
+running (1m07.1s), 0/1 VUs, 48 complete and 0 interrupted iterations
+default ✓ [======================================] 1 VUs  1m0s

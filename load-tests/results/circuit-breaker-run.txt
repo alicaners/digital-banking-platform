@@ -1,0 +1,141 @@
+INFO[0006] Setup tamam: kullanici=cb1186490715, gonderen hesap=15, alici hesap=16  source=console
+INFO[0006] [0s] OK    59ms                               source=console
+INFO[0007] [1s] OK    57ms                               source=console
+INFO[0009] [3s] OK    80ms                               source=console
+INFO[0010] [4s] OK    47ms                               source=console
+INFO[0011] [5s] OK    80ms                               source=console
+INFO[0013] [6s] OK    124ms                              source=console
+INFO[0014] [8s] OK    55ms                               source=console
+INFO[0015] [9s] OK    62ms                               source=console
+INFO[0016] [10s] OK    69ms                              source=console
+INFO[0018] [12s] OK    63ms                              source=console
+INFO[0019] [13s] OK    60ms                              source=console
+INFO[0020] [14s] OK    69ms                              source=console
+INFO[0021] [15s] OK    59ms                              source=console
+INFO[0023] [17s] OK    50ms                              source=console
+INFO[0024] [18s] OK    70ms                              source=console
+INFO[0025] [19s] OK    48ms                              source=console
+INFO[0026] [20s] OK    91ms                              source=console
+INFO[0029] [23s] HATA  1108ms | HTTP 200 | FAILED | İşlem reddedildi <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0031] [25s] HATA  1024ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0033] [27s] HATA  1028ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0034] [28s] HATA  40ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0036] [30s] HATA  22ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0037] [31s] HATA  22ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0038] [32s] HATA  21ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0039] [33s] HATA  39ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0041] [35s] HATA  31ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0042] [36s] HATA  34ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0043] [37s] HATA  34ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0045] [39s] HATA  1034ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0048] [41s] HATA  1045ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0050] [44s] HATA  1040ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0051] [45s] HATA  23ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0052] [46s] HATA  38ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0053] [47s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0055] [49s] HATA  63ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0056] [50s] HATA  40ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0057] [51s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0058] [52s] HATA  45ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0060] [54s] HATA  49ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0062] [56s] HATA  1006ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0064] [58s] HATA  1014ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0066] [60s] HATA  1023ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0068] [62s] HATA  32ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0069] [63s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0070] [64s] HATA  30ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0071] [65s] HATA  34ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0073] [66s] HATA  31ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0074] [68s] HATA  40ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0075] [69s] HATA  27ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0076] [70s] HATA  30ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0078] [72s] HATA  1032ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0081] [75s] HATA  1041ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0083] [77s] HATA  1036ms | HTTP 200 | FAILED | Hesap servisi şu anda kullanılamıyor <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0084] [78s] HATA  51ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0085] [79s] HATA  31ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0087] [81s] HATA  32ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0088] [82s] HATA  24ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0089] [83s] HATA  35ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0090] [84s] HATA  37ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0092] [86s] HATA  30ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0093] [87s] HATA  21ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0095] [89s] HATA  1035ms | HTTP 200 | FAILED | İşlem reddedildi <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0096] [90s] HATA  23ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0098] [91s] HATA  25ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0099] [93s] HATA  25ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0100] [94s] HATA  22ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0101] [95s] HATA  44ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0102] [96s] HATA  27ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0104] [98s] HATA  23ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0105] [99s] HATA  33ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0107] [101s] HATA  1040ms | HTTP 200 | FAILED | İşlem reddedildi <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0108] [102s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0110] [104s] HATA  27ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0111] [105s] HATA  38ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0112] [106s] HATA  34ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0113] [107s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0115] [108s] HATA  31ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0116] [110s] HATA  32ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0117] [111s] HATA  43ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0119] [113s] HATA  1047ms | HTTP 200 | FAILED | İşlem reddedildi <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0121] [114s] HATA  37ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0122] [116s] HATA  79ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0123] [117s] HATA  33ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0124] [118s] HATA  30ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0125] [119s] HATA  27ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0127] [121s] HATA  24ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0128] [122s] HATA  36ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0130] [124s] HATA  1047ms | HTTP 200 | FAILED | İşlem reddedildi <- yavas: 3 deneme + bekleme (CLOSED / HALF-OPEN)  source=console
+INFO[0131] [125s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0133] [127s] HATA  34ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0134] [128s] HATA  24ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0135] [129s] HATA  30ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0136] [130s] HATA  29ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0138] [131s] HATA  28ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0139] [133s] HATA  27ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0140] [134s] HATA  24ms | HTTP 200 | FAILED | Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin <- hizli red (circuit OPEN)  source=console
+INFO[0142] [136s] OK    1003ms                           source=console
+INFO[0143] [137s] OK    50ms                             source=console
+INFO[0145] [139s] OK    54ms                             source=console
+INFO[0146] [140s] OK    52ms                             source=console
+INFO[0147] [141s] OK    64ms                             source=console
+INFO[0149] [142s] OK    63ms                             source=console
+INFO[0150] [144s] OK    42ms                             source=console
+INFO[0151] [145s] OK    59ms                             source=console
+INFO[0152] [146s] OK    58ms                             source=console
+INFO[0154] [147s] OK    55ms                             source=console
+INFO[0155] [149s] OK    40ms                             source=console
+INFO[0156] [150s] OK    53ms                             source=console
+INFO[0157] [151s] OK    65ms                             source=console
+INFO[0159] [152s] OK    53ms                             source=console
+
+
+  █ TOTAL RESULTS
+
+    CUSTOM
+    transfers_completed............: 31    0.194056/s
+    transfers_failed...............: 79    0.49453/s
+
+    HTTP
+    http_req_duration..............: avg=189.66ms min=21.17ms med=40.98ms max=1.1s p(90)=1.02s p(95)=1.03s
+      { expected_response:true }...: avg=189.66ms min=21.17ms med=40.98ms max=1.1s p(90)=1.02s p(95)=1.03s
+    http_req_failed................: 0.00% 0 out of 116
+    http_reqs......................: 116   0.726146/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.39s    min=1.22s   med=1.24s   max=2.3s p(90)=2.22s p(95)=2.24s
+    iterations.....................: 109   0.682327/s
+    vus............................: 1     min=0       max=1
+    vus_max........................: 1     min=1       max=1
+
+    NETWORK
+    data_received..................: 39 kB 241 B/s
+    data_sent..................: 51 kB 320 B/s
+
+
+
+
+running (2m39.8s), 0/1 VUs, 109 complete and 1 interrupted iterations
+default ✗ [=======================>--------------] 1 VUs  2m33.2s/4m0s
+ERRO[0160] test run was aborted because k6 received a 'interrupt' signal

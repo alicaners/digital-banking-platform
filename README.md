@@ -178,7 +178,13 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
   bir PostgreSQL container'ında çalışan testler.
 - **Swagger/OpenAPI**: Beş servisin API'si, Gateway üzerinden tek bir
   merkezi sayfada toplandı: http://localhost:8080/swagger-ui.html
-
+- **Yük testi (k6)**: Gateway üzerinden uçtan uca çalışan iki senaryo:
+  tek kullanıcılı taban çizgisi testi (48 transferin tamamı `COMPLETED`,
+  transfer p95 ≈ 70 ms) ve Account Service'in test sırasında bilerek
+  durdurulduğu bir kesinti senaryosu (Circuit Breaker'ın CLOSED → OPEN →
+  HALF-OPEN → kurtarma döngüsünün zaman damgalı kaydı). Bu testler tek
+  sanal kullanıcıyla çalışır, gerçek bir eşzamanlı kapasite testi değildir
+  (bkz. load-tests/README.md ve docs/asama8-notlar.md, "Yük Testi (k6)").
 (bkz. docs/asama6-notlar.md)
 
 ## DevOps
@@ -200,7 +206,7 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
 Kafka, Redis, Docker, Docker Compose, GitHub Actions, JWT (jjwt),
 OpenFeign, Resilience4j, Spring Retry, JUnit 5, Mockito, Testcontainers,
-Springdoc OpenAPI
+Springdoc OpenAPI, k6
 
 ## Durum
 
@@ -224,4 +230,7 @@ düzeltmeler (circuit breaker'ın iş kuralı hatalarını arıza saymaması,
 veritabanı kimlik bilgilerinin ortam değişkenine taşınması, constructor
 injection tutarlılığının tamamlanması, Eureka Server için Docker
 healthcheck, Account Service → Customer Service çağrısına circuit
-breaker/retry koruması) tamamlandı (bkz. docs/asama8-notlar.md).
+breaker/retry koruması) tamamlandı (bkz. docs/asama8-notlar.md). Ardından
+k6 ile iki yük testi senaryosu eklendi: taban çizgisi ve gerçek bir servis
+kesintisinde Circuit Breaker davranışı (bkz. load-tests/README.md ve
+docs/asama8-notlar.md, "Yük Testi (k6)").

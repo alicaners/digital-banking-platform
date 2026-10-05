@@ -335,8 +335,10 @@ exception zaten Hibernate tarafından otomatik fırlatılıyor.
 
 **Not**: Gerçek eşzamanlılık, Postman ile elle tetiklenemedi (network
 timing'ine bağlı, manuel testte garanti edilemiyor) - kodun doğruluğu
-statik incelemeyle teyit edildi, gerçek yük testi (JMeter/k6) bu
-projenin kapsamı dışında bırakıldı.
+statik incelemeyle teyit edildi. Yük testi bu aşamada yapılmadı; sonradan
+eklenen k6 senaryoları ("Yük Testi (k6)" bölümü) tek sanal kullanıcıyla
+çalıştığı için bu çakışmayı da tetiklemiyor, optimistic lock davranışı
+hâlâ yalnızca statik incelemeyle doğrulanmış durumda.
 
 ### Madde 7 — Kafka Event Yayını Başarısızlığının İzole Edilmesi
 
@@ -707,3 +709,79 @@ sınıflandırmasının eskisiyle birebir aynı davrandığı doğrulandı). `mv
 
 Bu ek düzeltmelerin tamamı, ilgili maddeler için ayrı commit halinde
 tamamlandı ve Docker/Postman ile uçtan uca doğrulandı.
+
+
+
+
+## Yük Testi (k6)
+
+Önceki incelemelerde "yük testi yok, circuit breaker gerçek trafikte test
+edilmedi" eksikliği not edilmişti. Bunu kapatmak için `load-tests/` altına iki
+k6 senaryosu eklendi (çalıştırma ayrıntıları için bkz. `load-tests/README.md`,
+örnek çıktılar için `load-tests/results/`). Her senaryo kendi test verisini
+(kullanıcı, müşteri, iki hesap, bakiye) Gateway üzerinden kurduğu için tekrar
+tekrar çalıştırılabiliyor; iki senaryonun ortak kodu `lib/common.js`'te.
+
+### Senaryo 1 — Taban çizgisi (`transfer-load-test.js`)
+
+Tek sanal kullanıcı, 1 dakika, yaklaşık 1.2 saniye arayla art arda transfer.
+Eşikler: transfer p95 < 500 ms, transfer hata oranı < %1, check başarısı > %99.
+
+**Sonuç** (`results/transfer-baseline.txt`): 48 transferin tamamı `COMPLETED`,
+transfer p95 = 70.3 ms, hata oranı %0, tüm eşikler geçti. Script ortak koda
+(`lib/common.js`) taşındıktan sonra yeniden çalıştırıldığında aynı sonuçlar
+alındı (p95 = 64.32 ms).
+
+### Senaryo 2 — Gerçek servis kesintisinde circuit breaker (`circuit-breaker-load-test.js`)
+
+Gün 3 Madde 5'te circuit breaker elle (Postman ile) test edilmişti. Bu
+senaryoda aynı davranış, sürekli akan trafik altında zaman damgalı olarak
+kaydedildi: test sürerken `banking-account-service` container'ı durdurulup
+yaklaşık 2 dakika sonra yeniden başlatıldı. Her transferin süresi, devre
+durumunu dolaylı olarak gösteriyor: ~1000 ms'lik hata, 3 deneme ve araya
+giren 2 × 500 ms bekleme (gerçek çağrı yapılıyor, CLOSED ya da HALF-OPEN);
+20–80 ms'lik hata, çağrı yapılmadan hızlı reddedilme (OPEN).
+
+**Gözlenen akış** (`results/circuit-breaker-run.txt`):
+
+| Zaman | Gözlem | Anlamı |
+|---|---|---|
+| 0–20 sn | 17 başarılı transfer, 40–125 ms | CLOSED, normal çalışma |
+| 23–27 sn | 3 yavaş hata (~1.0–1.1 sn) | Servis kapalı, deneme + bekleme |
+| 28 sn | İlk hızlı red (40 ms) | Circuit OPEN |
+| 39–134 sn | Tekrarlayan döngüler: 8–10 hızlı red (21–79 ms), ardından 1–3 yavaş hata (~1.0 sn) | OPEN → bekleme süresi dolunca HALF-OPEN deneme çağrıları → başarısız olunca yine OPEN |
+| 136 sn | İlk başarılı transfer 1003 ms, ardından 14 transfer 40–65 ms | Servis geri döndü, circuit kapandı |
+
+Test 2 dakika 39 saniyede (4 dakikalık plandan önce) bilerek durduruldu,
+çünkü kurtarma gözlendikten sonra yeni bilgi beklenmiyordu. Toplam 110
+transfer: 31 `COMPLETED`, 79 `FAILED` (hızlı red ve yavaş hatalar dahil).
+İlk üç döngü 16–17 saniye sürdü (HALF-OPEN'da 3 yavaş deneme); sonraki
+döngüler 11–12 saniye sürdü (HALF-OPEN'da 1 yavaş deneme). Hızlı reddedilen
+isteklerin süresi (21–79 ms), gerçek çağrı yapılan isteklerin süresinden
+(~1000 ms) belirgin biçimde kısa: circuit breaker, kesinti sırasında
+Account Service'e boşuna yük bindirmeyip istemciye hızlı hata dönüyor.
+
+### Okunması gereken notlar ve sınırlamalar
+
+- **`http_req_failed` neden %0 çıkıyor?** Transfer iş hataları (servise
+  ulaşılamaması dahil) HTTP 200 ve `status: FAILED` olarak dönüyor, HTTP hatası
+  değil. Bu yüzden başarısızlıklar k6'nın hata oranı yerine, senaryoda
+  tanımlanan `transfers_completed` / `transfers_failed` sayaçlarından izleniyor.
+- **Bu testler gerçek eşzamanlı yük değil.** İkisi de tek sanal kullanıcıyla,
+  istekler arasında bekleyerek çalışıyor, çünkü Gateway'deki global rate
+  limiter (10 saniyede 10 istek) daha hızlı bir testte iş mantığı yerine 429
+  yanıtlarını ölçerdi. Yani bunlar bir kapasite/dayanıklılık-sınırı testi
+  değil; normal hızda gecikmeyi ve kesinti davranışını doğruluyor. Çok
+  kullanıcılı trafik altındaki davranış (örn. optimistic lock çakışmaları)
+  hâlâ test edilmedi.
+- **Açık nokta: circuit'in hangi çağrıda açıldığı.** Yapılandırma
+  `sliding-window-size: 10`, `failure-rate-threshold: 50` ve her deneme ayrı
+  bir çağrı olarak sayıldığına göre, 17 başarılı çağrıdan sonra circuit'in
+  yaklaşık 5 başarısız çağrıda açılması beklenirdi. Oysa gözlemde, ilk üç
+  isteğin üçü de tam 3 denemeyle tamamlandı ve ilk hızlı red dördüncü istekte
+  görüldü. Bu fark şimdilik açıklanmadı; çağrı sayımı Prometheus/Grafana
+  metrikleri eklendiğinde (circuit breaker durumu ve çağrı sayıları) ayrıca
+  incelenecek.
+- **136. saniyedeki 1003 ms'lik ilk başarılı transfer**, 2 başarısız deneme
+  ve üçüncü denemede başarı olarak yorumlanıyor (2 × 500 ms bekleme); servis
+  bu isteğin ortasında geri döndü.
