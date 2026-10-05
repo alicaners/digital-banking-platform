@@ -11,7 +11,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -48,3 +48,13 @@ resilience4j:
         automatic-transition-from-open-to-half-open-enabled: true
         ignore-exceptions:
           - com.banking.transaction.exception.NonRetryableException
+  timelimiter:
+    instances:
+      accountService:
+        timeout-duration: 5s
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"
+  level:
+    org.hibernate.SQL: debug

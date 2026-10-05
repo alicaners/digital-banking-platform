@@ -84,11 +84,14 @@ public class TransactionService {
 
         } catch (FeignException e) {
 
+            log.warn("Account Service çağrısı Feign hatasıyla başarısız oldu: status={}, mesaj={}",
+                    e.status(), e.getMessage());
             transaction.setFailureReason(extractErrorMessage(e));
             transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (NonRetryableException e) {
 
+            log.info("Account Service iş kuralı nedeniyle işlemi reddetti: {}", e.getMessage());
             transaction.setFailureReason(
                     (e.getCause() instanceof FeignException fe)
                             ? extractErrorMessage(fe)
@@ -98,11 +101,14 @@ public class TransactionService {
 
         } catch (CallNotPermittedException e) {
 
+            log.warn("Circuit breaker açık, Account Service çağrısı yapılmadı");
             transaction.setFailureReason("Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin");
             transaction.setStatus(TransactionStatus.FAILED);
 
         } catch (RuntimeException e) {
 
+            // Stack trace bilerek yazdırılıyor: asıl neden (cause) burada görünecek
+            log.warn("Account Service çağrısı beklenmeyen bir hatayla başarısız oldu", e);
             transaction.setFailureReason(
                     (e.getMessage() != null)
                             ? e.getMessage()
@@ -112,6 +118,7 @@ public class TransactionService {
 
         } catch (Exception e) {
 
+            log.error("Account Service çağrısında beklenmeyen hata", e);
             transaction.setFailureReason("Beklenmeyen bir hata oluştu: " + e.getMessage());
             transaction.setStatus(TransactionStatus.FAILED);
         }
