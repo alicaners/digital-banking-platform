@@ -59,15 +59,15 @@ güvenlik açığıydı ve tamamen giderildi.
 
 4. **Ownership kontrolü eklendi**: `CustomerService` ve `AccountService`'e
    `checkReadAccess`/`checkWriteAccess` metodları eklendi. Kural:
-    - Görüntüleme (`getById`, `getAll`): ADMIN rolü herkesin kaydını
-      görebilir, diğerleri sadece kendi kaydını.
-    - Değiştirme (`update`, `delete`, `withdraw`): ADMIN dahil, sadece
-      kaydın gerçek sahibi işlem yapabilir - admin'e kısıtlı (sadece
-      okuma) yetki verildi, bu bilinçli bir tasarım kararı.
-    - **İstisna - `deposit`**: Ownership kontrolü kasıtlı olarak
-      eklenmedi, çünkü bir hesaba para yatırmak (örn. birine transfer
-      yapmak), o hesabın sahibi olmayı gerektirmemeli. Sadece
-      `withdraw`'da (paranın çıkışında) sahiplik zorunlu.
+   - Görüntüleme (`getById`, `getAll`): ADMIN rolü herkesin kaydını
+     görebilir, diğerleri sadece kendi kaydını.
+   - Değiştirme (`update`, `delete`, `withdraw`): ADMIN dahil, sadece
+     kaydın gerçek sahibi işlem yapabilir - admin'e kısıtlı (sadece
+     okuma) yetki verildi, bu bilinçli bir tasarım kararı.
+   - **İstisna - `deposit`**: Ownership kontrolü kasıtlı olarak
+     eklenmedi, çünkü bir hesaba para yatırmak (örn. birine transfer
+     yapmak), o hesabın sahibi olmayı gerektirmemeli. Sadece
+     `withdraw`'da (paranın çıkışında) sahiplik zorunlu.
 
 5. **Transaction Service güncellendi**: `TransactionController`,
    Gateway'den gelen `X-User-Id`'yi okuyup `TransactionService.transfer()`'a
@@ -785,3 +785,157 @@ Account Service'e boşuna yük bindirmeyip istemciye hızlı hata dönüyor.
 - **136. saniyedeki 1003 ms'lik ilk başarılı transfer**, 2 başarısız deneme
   ve üçüncü denemede başarı olarak yorumlanıyor (2 × 500 ms bekleme); servis
   bu isteğin ortasında geri döndü.
+- **Yavaş hata (~1000 ms) ile TimeLimiter zaman aşımı farklı şeyler.** Servis
+  tamamen durduğunda bağlantı hatası anında alınır, `FeignException` olduğu
+  için retry devreye girer (3 deneme + 2 × 500 ms bekleme ≈ 1000 ms); bu
+  yüzden yukarıdaki yorum bu senaryo için geçerli. Servis ayakta ama yanıtı
+  geç veriyorsa (soğuk başlangıç gibi) başka bir mekanizma devreye girer:
+  Resilience4J'nin varsayılan 1 saniyelik TimeLimiter'ı çağrıyı keser. Bu
+  durum k6 koşularında gözlenmedi, ama gerçek bir hata olarak yapılandırılmış
+  loglama çalışmasında ortaya çıktı (bkz. "Yapılandırılmış Loglama ve
+  correlationId" bölümü, "TimeLimiter bulgusu").
+
+
+
+## Yapılandırılmış Loglama ve correlationId
+
+Mikroservis mimarisinde tek bir kullanıcı isteği birden fazla servisten ve
+bir Kafka mesajından geçiyor (Gateway → transaction-service → account-service
+→ Kafka → notification-service). Her servisin logu ayrı bir container'da
+olduğu için, bir transferin hata verdiği durumda "bu isteğin her serviste ne
+yaptığını" görmek zaman damgası tahminine dayanıyordu. Bu bölümde, bir isteğin
+tüm servislerde tek bir kimlikle (`correlationId`) izlenebilmesi sağlandı ve
+loglar makine tarafından okunabilir (JSON) hale getirildi.
+
+### Tasarım
+
+- **Kimlik:** `X-Correlation-Id` HTTP header'ı. Gateway üretir: istemci geçerli
+  bir değer gönderdiyse (harf, rakam ve tire, 8–64 karakter) onu kullanır,
+  yoksa ya da şüpheliyse yeni bir UUID üretir. Kural kasıtlı olarak katı:
+  istemciden gelen serbest metnin loglara olduğu gibi yazılması, log
+  enjeksiyonuna (satır sonu karakterleriyle sahte log satırı) açık olurdu.
+- **Gateway (reaktif):** Reaktif yığında bir isteğin işlenmesi tek bir
+  thread'e bağlı olmadığı için MDC güvenilir değil. Bu yüzden Gateway'de id
+  loga yapılandırılmış alan olarak (`StructuredArguments.keyValue`) veriliyor.
+  Cevap header'ı `beforeCommit` içinde `set` ile yazılıyor; aksi halde
+  downstream servis de aynı header'ı eklediğinden istemci iki değer
+  görüyordu.
+- **MVC servisleri (auth, customer, account, transaction):** Bir
+  `OncePerRequestFilter` header'ı okuyup SLF4J MDC'ye (`correlationId`)
+  koyuyor, cevaba da yazıyor ve istek bitince `finally` içinde temizliyor.
+  Temizlik önemli: thread havuzundaki bir thread bir sonraki isteğe eski id
+  ile gitmemeli.
+- **Filtre sırası (Gateway):** CorrelationIdFilter (-3) → RateLimiterFilter
+  (-2) → JwtAuthenticationFilter (-1). Böylece rate limit ya da kimlik
+  doğrulama reddettiği istekler de bir id ile loglanıyor.
+
+### JSON log
+
+- `logstash-logback-encoder` 8.1 kullanıldı. 9.0 sürümü Jackson 3 istiyor ve
+  Spring Boot 3.3.4 ile uyumsuz.
+- Her serviste bir `logback-spring.xml` var: `docker` profilinde
+  `LogstashEncoder` (MDC alanları otomatik JSON'a giriyor), diğer
+  profillerde Spring'in normal konsol çıktısı (geliştirirken okunabilir
+  kalsın diye). Docker Compose'ta her servise `SPRING_PROFILES_ACTIVE: docker`
+  verildi.
+- Hibernate SQL'i `show-sql` yerine `org.hibernate.SQL` logger'ı üzerinden
+  yazılıyor (`show-sql: false`, logger seviyesi `debug`). `show-sql` doğrudan
+  stdout'a yazdığı için JSON'a ve MDC'ye girmiyordu; logger üzerinden giden
+  SQL satırları artık `correlationId` taşıyor. Parametre değerleri
+  loglanmıyor.
+
+### Servisler arası taşıma
+
+- **Feign (HTTP):** Her serviste bir `RequestInterceptor` var; MDC'deki id'yi
+  giden isteğe `X-Correlation-Id` header'ı olarak ekliyor
+  (transaction → account, account → customer).
+- **MDC thread sorunu:** Account ve Customer çağrıları
+  `circuitBreaker.run(...)` içinde yapılıyor ve TimeLimiter bu çağrıyı
+  **başka bir thread'de** çalıştırıyor. MDC thread'e özel olduğu için o
+  thread'de id boştu; sadece interceptor yazmak yetmedi. `AccountServiceExecutor`
+  ve `CustomerServiceExecutor`, istek thread'indeki MDC'yi kopyalayıp iş
+  yapılan thread'e aktarıyor ve iş bitince eski haline döndürüyor.
+- **Kafka:** Event'in içeriği değiştirilmeden, id Kafka mesajının
+  **header**'ına yazılıyor (`TransactionEventProducer`). Notification-service
+  consumer'ı header'ı okuyor, aynı doğrulama kuralından geçiriyor, MDC'ye
+  koyup bildirimi logluyor ve `finally` içinde temizliyor. Header yoksa ya da
+  şüpheliyse log satırına id yazılmıyor.
+
+### TimeLimiter bulgusu (loglama sayesinde yakalanan gerçek hata)
+
+Loglama çalışmasının transaction-service ayağında, servisler yeni
+başladıktan sonra yapılan ilk transfer `FAILED` ("Hesap servisi şu anda
+kullanılamıyor") döndü, ama Account Service'te para aslında bir saniye sonra
+transfer edilmişti (kayıt `FAILED`, bakiyeler değişmiş). Aynı key ile tekrar
+denemek mümkün değildi (başarısız sonuç da kayıtlı), yeni key ile ikinci
+transfer normal çalıştı. Hata tekrarlanabilir çıktı: servisler yeniden
+başlatılıp ~90 saniye beklendikten sonra yapılan ilk transfer aynı şekilde
+başarısız oldu.
+
+`TransactionService` catch bloklarına log eklenince stack trace nedeni
+gösterdi:
+
+```
+Caused by: java.util.concurrent.TimeoutException:
+TimeLimiter 'accountService' recorded a timeout exception.
+```
+
+Spring Cloud CircuitBreaker, `resilience4j.timelimiter` ayarı yapılmadıysa
+varsayılan **1 saniyelik** bir TimeLimiter uyguluyor. Soğuk başlayan Account
+Service'in ilk çağrısı bu süreyi aşıyor (gözlenen: ~1,1 saniye), çağrı
+transaction-service tarafında kesiliyor, ama Account Service işi arka planda
+tamamlıyor. Sonuç: para gitmiş, kayıt `FAILED`.
+
+`TimeoutException` bir `FeignException` olmadığı için retry tetiklenmedi; bu
+sayede aynı transfer ikinci kez işlenmedi. Sorun "çift para" değil, "yanlış
+kayıt" idi.
+
+**Düzeltme:** `transaction-service/application.yml` içine
+`resilience4j.timelimiter.instances.accountService.timeout-duration: 5s`
+eklendi. Aynı yapılandırma eksikliği Account Service'te
+`customerService` için de vardı, o da aynı şekilde eklendi.
+
+**Doğrulama:** Düzeltmeden sonra iki ayrı soğuk başlangıçta transfer
+`COMPLETED` döndü, bakiyeler beklenen değerde kaldı.
+
+**Kalan sınırlama:** Zaman aşımı süresi ne olursa olsun, Account Service
+süreyi aşarsa aynı tutarsızlık (para gitti, kayıt `FAILED`) oluşabilir.
+Kalıcı çözüm, belirsiz sonuçlarda Account Service'e idempotency key ile
+durumu sorgulayıp kaydı düzelten bir mutabakat (reconciliation) adımı olurdu;
+bu çalışmada yapılmadı.
+
+### Karşılaşılan pratik sorunlar
+
+- **Compose değişken önceliği:** Docker Compose'ta terminalde ayarlı bir
+  ortam değişkeni `.env` dosyasındaki değeri ezer. Gateway testi için
+  terminale geçici `JWT_SECRET` verilip temizlenmediğinde, container yanlış
+  secret ile başladı ve tüm istekler 401 döndü. Test sonrası `set JWT_SECRET=`
+  ile temizlemek gerekiyor.
+- **Eureka gecikmesi:** Container yeniden başlayınca servisler birbirini
+  30–90 saniye sonra görüyor; ilk istek bu sürede başarısız olabilir.
+- **Spring Data uyarısı:** Loglarda "Serializing PageImpl instances as-is..."
+  uyarısı var (sayfalama endpoint'lerinden). Çözümü JSON çıktı yapısını
+  değiştireceği için bu çalışmanın kapsamı dışında bırakıldı.
+
+### Doğrulama
+
+Tek bir transfer (`X-Correlation-Id: transfer-test-0007`) ve
+`findstr transfer-test-0007` ile dört servisin logunda aynı id görüldü:
+Gateway (istek özeti, süre), transaction-service (SQL, Kafka producer),
+account-service (iki select, iki update) ve notification-service
+("BİLDİRİM GÖNDERİLDİ ... İşlem #311 başarıyla tamamlandı").
+
+Birim testleri: her MVC servisinde `CorrelationIdFilterTest` (id yoksa
+üretiliyor, geçerli id korunuyor, şüpheli id yenisiyle değiştiriliyor, MDC
+istek sonunda temizleniyor), Gateway'de ek olarak tek header kontrolü;
+`FeignCorrelationIdInterceptorTest` (transaction ve account); producer için
+header ekleme testi; consumer için üç test (header var, yok, şüpheli).
+
+### Sınırlamalar
+
+- Eureka-server JSON log kullanmıyor.
+- Kafka event'inde id yalnızca mesaj header'ında; mesajı header'ı okumayan bir
+  tüketici id'yi göremez (şu an tek tüketici notification-service).
+- Logların toplanması/aranması (ELK, Loki gibi) bu çalışmanın kapsamı dışında;
+  loglar şimdilik `docker logs` ile okunuyor. JSON format, ileride böyle bir
+  araç eklemeyi kolaylaştırıyor.

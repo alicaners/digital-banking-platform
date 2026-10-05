@@ -6,7 +6,7 @@ Spring Boot ve Spring Cloud ile geliştirilmiş mikroservis mimarili
 dijital bankacılık platformu simülasyonu.
 
 ## Mimari
- 
+
 Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Discovery) → İlgili Mikroservis
 
 ```mermaid
@@ -120,6 +120,23 @@ Gateway seviyesinde dışarıdan gelen isteklere tamamen kapatılmıştır -
 sadece container-to-container iletişime açıktır (bkz.
 docs/asama8-notlar.md, "Gün 3 — Madde 1").
 
+## Loglama ve İzlenebilirlik
+
+Bir istek birden fazla servisten ve bir Kafka mesajından geçtiği için,
+her isteğe Gateway'de bir `X-Correlation-Id` atanır (istemci geçerli bir
+değer gönderirse o korunur, yoksa UUID üretilir) ve bu kimlik tüm
+servislerin loglarına yazılır: servisler arası Feign çağrılarında HTTP
+header olarak, Kafka event'inde mesaj header'ı olarak taşınır. Docker
+profilinde loglar JSON formatındadır ve `correlationId` ayrı bir alandır;
+böylece bir transfer, Gateway → transaction → account → notification
+zinciri boyunca tek bir kimlikle izlenebilir:
+
+```bash
+docker logs banking-account-service 2>&1 | findstr <correlationId>
+```
+
+(bkz. docs/asama8-notlar.md, "Yapılandırılmış Loglama ve correlationId").
+
 ## Atomic Transfer ve Idempotency
 
 Para transferi, Account Service içinde tek bir `@Transactional`
@@ -155,6 +172,11 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 - **Retry**: Sadece geçici (5xx/bağlantı) hatalarda, programatik
   `RetryTemplate` ile en fazla 3 kez tekrar deneme yapılır. İş kuralı
   hataları (4xx) hiç tekrar denenmez.
+- **Zaman aşımı (TimeLimiter)**: Account ve Customer Service çağrıları
+  için 5 saniyelik zaman aşımı açıkça tanımlıdır. Yapılandırılmadığında
+  Resilience4J'nin varsayılanı olan 1 saniye, soğuk başlayan bir serviste
+  işlem tamamlanmışken kaydın `FAILED` yazılmasına yol açıyordu (bkz.
+  docs/asama8-notlar.md, "TimeLimiter bulgusu").
 - **Optimistic Locking**: Account entity'sinde `@Version` alanıyla
   korunan hesaplarda, iki eşzamanlı işlem çakıştığında geç kalan işlem
   sessizce üzerine yazmak yerine `409 Conflict` ile reddedilir.
@@ -174,6 +196,9 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 - **Unit testler (Mockito)**: Auth, Account ve Transaction Service'te
   iş mantığının kritik senaryolarını (ownership, atomic transfer,
   idempotency dahil) kapsayan testler.
+- **correlationId testleri**: Her serviste filtre/interceptor için,
+  Kafka tarafında producer ve consumer için birim testleri (id üretimi,
+  şüpheli değerin reddedilmesi, MDC'nin istek sonunda temizlenmesi).
 - **Integration test (Testcontainers)**: Account Service için gerçek
   bir PostgreSQL container'ında çalışan testler.
 - **Swagger/OpenAPI**: Beş servisin API'si, Gateway üzerinden tek bir
@@ -185,7 +210,7 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
   HALF-OPEN → kurtarma döngüsünün zaman damgalı kaydı). Bu testler tek
   sanal kullanıcıyla çalışır, gerçek bir eşzamanlı kapasite testi değildir
   (bkz. load-tests/README.md ve docs/asama8-notlar.md, "Yük Testi (k6)").
-(bkz. docs/asama6-notlar.md)
+  (bkz. docs/asama6-notlar.md)
 
 ## DevOps
 
@@ -206,7 +231,7 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
 Kafka, Redis, Docker, Docker Compose, GitHub Actions, JWT (jjwt),
 OpenFeign, Resilience4j, Spring Retry, JUnit 5, Mockito, Testcontainers,
-Springdoc OpenAPI, k6
+Springdoc OpenAPI, k6, SLF4J MDC, Logstash Logback Encoder (JSON log)
 
 ## Durum
 
@@ -233,4 +258,8 @@ healthcheck, Account Service → Customer Service çağrısına circuit
 breaker/retry koruması) tamamlandı (bkz. docs/asama8-notlar.md). Ardından
 k6 ile iki yük testi senaryosu eklendi: taban çizgisi ve gerçek bir servis
 kesintisinde Circuit Breaker davranışı (bkz. load-tests/README.md ve
-docs/asama8-notlar.md, "Yük Testi (k6)").
+docs/asama8-notlar.md, "Yük Testi (k6)"). Ardından yapılandırılmış (JSON)
+loglama ve servisler arası correlationId izlenebilirliği eklendi
+(Gateway'den Kafka'ya kadar tek kimlik); bu çalışma sırasında bulunan bir
+zaman aşımı (TimeLimiter) hatası da düzeltildi (bkz. docs/asama8-notlar.md,
+"Yapılandırılmış Loglama ve correlationId").
