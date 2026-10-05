@@ -187,6 +187,7 @@ services:
     environment:
       KAFKA_HOST: kafka
       EUREKA_HOST: eureka-server
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       kafka:
         condition: service_healthy
