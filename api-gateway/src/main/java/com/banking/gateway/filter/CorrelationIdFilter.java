@@ -36,8 +36,13 @@ public class CorrelationIdFilter implements GlobalFilter, Ordered {
                 .request(r -> r.headers(h -> h.set(HEADER, correlationId)))
                 .build();
 
-        // Yanıt header'ını en başta koyuyoruz: 401/429 gibi erken dönen yanıtlarda da bulunsun
-        mutated.getResponse().getHeaders().set(HEADER, correlationId);
+        // Yanıt istemciye gönderilmeden hemen önce header'ı set ediyoruz. Bu an, servisin
+        // kendi eklediği aynı header'ın da yanıta geçtiği andan sonradır; set() hepsini
+        // tek değere indirir. 401/429 gibi erken dönen yanıtlar da bu aşamadan geçer.
+        mutated.getResponse().beforeCommit(() -> {
+            mutated.getResponse().getHeaders().set(HEADER, correlationId);
+            return Mono.empty();
+        });
 
         String method = mutated.getRequest().getMethod().name();
         String path = mutated.getRequest().getURI().getRawPath();
