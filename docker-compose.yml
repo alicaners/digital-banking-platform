@@ -107,6 +107,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-banking_pass}
       EUREKA_HOST: eureka-server
       JWT_SECRET: ${JWT_SECRET}
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
       postgres:
         condition: service_healthy
