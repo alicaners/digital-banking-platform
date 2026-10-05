@@ -103,6 +103,16 @@ Breaker (Resilience4j, açıkça `accountService` adıyla) ve Retry
   (10) hale getirildi - önceden bu ayar tanımlı olmadığı için
   Resilience4j'nin varsayılanı (100) geçerliydi, bu da circuit
   breaker'ın pratikte hiç devreye giremeyeceği anlamına geliyordu.
+- **Zaman aşımı (TimeLimiter)**: Account Service çağrısı için 5 saniyelik
+  bir zaman aşımı açıkça tanımlıdır (`resilience4j.timelimiter.instances.accountService`).
+  Tanımlanmadığında Resilience4J'nin varsayılanı olan 1 saniye geçerlidir;
+  soğuk başlayan bir Account Service'in ilk çağrısı bu süreyi aşıyor, çağrı
+  burada kesiliyor ama Account Service işi tamamlıyordu: para gidiyor,
+  transfer kaydı `FAILED` yazılıyordu. `TimeoutException`, `FeignException`
+  olmadığı için retry'ı tetiklemez; bu sayede aynı transfer iki kez
+  işlenmedi (bkz. docs/asama8-notlar.md, "TimeLimiter bulgusu"). Kalan
+  sınırlama: süre yine aşılırsa aynı tutarsızlık oluşabilir; bunu kapatacak
+  bir mutabakat (reconciliation) adımı yapılmadı.
 
 Aşama 5'te eklenen `@Retryable` kullanımı, self-invocation (AOP proxy)
 kısıtlaması nedeniyle aslında hiç tetiklenmiyordu; Aşama 8'de programatik
@@ -131,6 +141,33 @@ sırasında `transaction.getStatus().name()` ile `TransactionStatus`
 enum'undan string'e çevriliyor (bkz. docs/asama8-notlar.md,
 "Gün 4 — Madde 5.1").
 
+Event yayınlanırken isteğin `correlationId`'si Kafka mesajının header'ına
+(`X-Correlation-Id`) yazılır; event'in içeriği değişmemiştir. Notification
+Service bu header'ı okuyup kendi loglarına yazar.
+
+## Loglama ve correlationId
+Gelen her istekteki `X-Correlation-Id` header'ı, `CorrelationIdFilter`
+tarafından SLF4J MDC'ye (`correlationId`) konur; header yoksa ya da
+şüpheliyse (harf, rakam ve tire dışında karakter, 8–64 karakter dışında
+uzunluk) yeni bir UUID üretilir. Id, o isteğe ait tüm log satırlarına
+otomatik eklenir (Hibernate SQL logları dahil, bunlar `show-sql` yerine
+`org.hibernate.SQL` logger'ı üzerinden yazılır), cevaba da yazılır ve istek
+bitince MDC temizlenir.
+
+Account Service'e giden Feign çağrılarında `FeignCorrelationIdInterceptor`
+aynı id'yi `X-Correlation-Id` header'ı olarak iletir. Çağrı, TimeLimiter
+yüzünden ayrı bir thread'de çalıştığı için `AccountServiceExecutor`, MDC'yi
+o thread'e aktarır ve iş bitince temizler. Böylece bir transfer, Gateway →
+transaction-service → account-service → notification-service zinciri
+boyunca tek bir id ile izlenebilir.
+
+`docker` profilinde (Compose'ta `SPRING_PROFILES_ACTIVE: docker`) loglar
+JSON formatındadır ve `correlationId` ayrı bir alandır. `TransactionService`
+catch blokları, Account Service çağrısı başarısız olduğunda nedenini
+(Feign durumu, circuit breaker açık mı, beklenmeyen hata ve stack trace)
+loglar (bkz. docs/asama8-notlar.md, "Yapılandırılmış Loglama ve
+correlationId").
+
 ## Eşzamanlılık (Optimistic Locking)
 Account Service tarafında, aynı hesabın eşzamanlı güncellenmeye
 çalışılması durumunda oluşan çakışmalar (`OptimisticLockException`),
@@ -157,7 +194,10 @@ tekrar gönderilen isteğin cache'lenmiş sonucu döndürmesi, farklı
 kullanıcıların aynı key'i bağımsız kullanabilmesi, aynı key + farklı
 body'nin 409 Conflict vermesi, Kafka yayın hatasının transferi
 etkilememesi, ve cache'ten dönen bir FAILED transferin `failureReason`'ını
-korumas (bkz. docs/asama8-notlar.md).
+koruması. Ayrıca `CorrelationIdFilterTest`, `FeignCorrelationIdInterceptorTest`
+ve `TransactionEventProducerCorrelationTest`, correlationId'nin üretilmesini,
+Feign çağrısına ve Kafka mesajının header'ına taşınmasını ve MDC'nin istek
+sonunda temizlenmesini doğrular (bkz. docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
 http://localhost:8084/swagger-ui.html

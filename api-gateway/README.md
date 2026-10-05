@@ -53,6 +53,29 @@ bu adla tanımlı gerçek bir `RateLimiter` nesnesi kullanır. (Önceden bu
 yml ayarları tanımlıydı ama filtre koduyla hiç bağlanmamıştı, yani
 sessizce hiç uygulanmıyordu - bkz. docs/asama8-notlar.md, "Gün 4 — Madde 3".)
 
+## Loglama ve correlationId
+Gateway, her isteğe bir `X-Correlation-Id` atar: istemci geçerli bir değer
+gönderdiyse (harf, rakam ve tire, 8–64 karakter) onu korur, header yoksa ya da
+şüpheliyse yeni bir UUID üretir. Id, isteğe eklenerek downstream servislere
+iletilir ve cevaba da yazılır. Cevap header'ı `beforeCommit` içinde `set` ile
+yazıldığı için, downstream servis de aynı header'ı eklese istemci tek değer
+görür.
+
+İstek bitince Gateway, `POST /api/transactions/transfer -> 200 (1723 ms)
+correlationId=...` biçiminde bir özet satırı loglar. Gateway reaktif olduğu
+için (bir istek tek bir thread'e bağlı değildir) MDC yerine id'yi log satırına
+yapılandırılmış alan olarak (`StructuredArguments.keyValue`) yazar.
+
+Filtre sırası: `CorrelationIdFilter` (-3) → `RateLimiterFilter` (-2) →
+`JwtAuthenticationFilter` (-1). Böylece rate limit ya da kimlik doğrulama
+tarafından reddedilen (429/401/403) istekler de bir id ile loglanır.
+
+`docker` profilinde (Compose'ta `SPRING_PROFILES_ACTIVE: docker`) loglar JSON
+formatındadır ve `correlationId` ayrı bir alandır (bkz. docs/asama8-notlar.md,
+"Yapılandırılmış Loglama ve correlationId"). `CorrelationIdFilterTest`, id
+üretimini, geçerli id'nin korunmasını, şüpheli id'nin değiştirilmesini ve
+cevapta tek header olmasını doğrular.
+
 ## Route'lar
 /api/auth/**          -> auth-service
 /api/customers/**     -> customer-service

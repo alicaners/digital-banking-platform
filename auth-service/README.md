@@ -45,11 +45,24 @@ kullanılıyor - gerçek bir `.env` dosyası (bkz. proje kökündeki
 incelemede (code review) tespit edilen kritik bir güvenlik açığıydı
 (bkz. docs/asama8-notlar.md, "Gün 1 — Konu A").
 
+## Loglama ve correlationId
+Gelen her istekteki `X-Correlation-Id` header'ı, `CorrelationIdFilter`
+tarafından SLF4J MDC'ye (`correlationId`) konur; header yoksa ya da
+şüpheliyse (harf, rakam ve tire dışında karakter, 8–64 karakter dışında
+uzunluk) yeni bir UUID üretilir. Id, o isteğe ait tüm log satırlarına
+otomatik eklenir, cevaba da yazılır ve istek bitince MDC temizlenir.
+
+`docker` profilinde (Compose'ta `SPRING_PROFILES_ACTIVE: docker`) loglar
+JSON formatındadır ve `correlationId` ayrı bir alandır (bkz.
+docs/asama8-notlar.md, "Yapılandırılmış Loglama ve correlationId").
+
 ## Test
 Unit testler (Mockito) ile register ve login metodlarının tüm
 senaryoları kapsanmıştır; token üretimi artık `userId`/`role`
-parametreleriyle doğrulanır (bkz. docs/asama6-notlar.md,
-docs/asama8-notlar.md).
+parametreleriyle doğrulanır. Ayrıca `CorrelationIdFilterTest`, id
+üretimini, geçerli id'nin korunmasını, şüpheli id'nin değiştirilmesini
+ve MDC'nin istek sonunda temizlenmesini doğrular (bkz.
+docs/asama6-notlar.md, docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
 http://localhost:8081/swagger-ui.html

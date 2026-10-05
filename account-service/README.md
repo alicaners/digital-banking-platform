@@ -121,9 +121,32 @@ desende bir `CustomerServiceExecutor` üzerinden, açıkça isimlendirilmiş
 - Sadece geçici (5xx/bağlantı) hatalar en fazla 3 kez, 500ms arayla
   tekrar denenir; devre açıldığında (`OPEN`) çağrı hiç yapılmadan
   hızlıca reddedilir.
+- Çağrı için 5 saniyelik bir zaman aşımı (TimeLimiter) açıkça tanımlıdır
+  (`resilience4j.timelimiter.instances.customerService`). Tanımlanmadığında
+  Resilience4J'nin varsayılanı olan 1 saniye, yavaş yanıtlarda çağrının
+  boşuna kesilmesine yol açar (bkz. docs/asama8-notlar.md,
+  "TimeLimiter bulgusu").
 
 (bkz. docs/asama8-notlar.md, "Ek Düzeltmeler — İkinci Tur Kod
 İncelemesi", Madde 5)
+
+## Loglama ve correlationId
+Gelen her istekteki `X-Correlation-Id` header'ı, `CorrelationIdFilter`
+tarafından SLF4J MDC'ye (`correlationId`) konur; header yoksa ya da
+şüpheliyse (harf, rakam ve tire dışında karakter, 8–64 karakter dışında
+uzunluk) yeni bir UUID üretilir. Id, o isteğe ait tüm log satırlarına
+otomatik eklenir (Hibernate SQL logları dahil, bunlar `show-sql` yerine
+`org.hibernate.SQL` logger'ı üzerinden yazılır) ve istek bitince MDC
+temizlenir.
+
+Customer Service'e giden Feign çağrılarında `FeignCorrelationIdInterceptor`
+aynı id'yi `X-Correlation-Id` header'ı olarak iletir. Çağrı, TimeLimiter
+yüzünden ayrı bir thread'de çalıştığı için `CustomerServiceExecutor`,
+MDC'yi o thread'e aktarır ve iş bitince temizler.
+
+`docker` profilinde (Compose'ta `SPRING_PROFILES_ACTIVE: docker`) loglar
+JSON formatındadır ve `correlationId` ayrı bir alandır (bkz.
+docs/asama8-notlar.md, "Yapılandırılmış Loglama ve correlationId").
 
 ## Performans (Cache)
 Hesap sorgulama (GET /api/accounts/{id}) sonuçları Redis'te
@@ -136,7 +159,9 @@ Unit testler (Mockito) ve gerçek PostgreSQL üzerinde çalışan bir
 Integration test (Testcontainers) mevcuttur. Sahiplik kontrolünü
 doğrulayan testler de eklenmiştir (örn.
 `withdraw_notOwner_throwsAccessDeniedException`,
-`getAccountById_adminRole_bypassesOwnershipCheck`)
+`getAccountById_adminRole_bypassesOwnershipCheck`). Ayrıca
+`CorrelationIdFilterTest` ve `FeignCorrelationIdInterceptorTest`, id
+üretimini, header iletimini ve MDC temizliğini doğrular
 (bkz. docs/asama6-notlar.md, docs/asama8-notlar.md).
 
 ## API Dokümantasyonu
