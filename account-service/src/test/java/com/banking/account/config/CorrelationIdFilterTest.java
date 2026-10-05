@@ -23,7 +23,7 @@ class CorrelationIdFilterTest {
     }
 
     @Test
-    void headerYoksa_uuidUretilir_mdcDolar_istekSonundaTemizlenir() throws Exception {
+    void noHeader_generatesUuid_populatesMdc_clearsMdcAfterRequest() throws Exception {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         String id = runAndCaptureMdc(new MockHttpServletRequest(), response);
@@ -35,7 +35,7 @@ class CorrelationIdFilterTest {
     }
 
     @Test
-    void gecerliHeader_aynenKorunur() throws Exception {
+    void validHeader_isKeptAsIs() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(CorrelationIdFilter.HEADER, "abc12345-test");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -47,7 +47,7 @@ class CorrelationIdFilterTest {
     }
 
     @Test
-    void supheliHeader_yeniUuidIleDegistirilir() throws Exception {
+    void suspiciousHeader_isReplacedWithNewUuid() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(CorrelationIdFilter.HEADER, "kotu deger!\nsahte-log-satiri");
 
