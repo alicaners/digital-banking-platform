@@ -56,6 +56,23 @@ durumu okunur:
 Örnek sonuç (`results/circuit-breaker-run.txt`): 23. saniyeden itibaren yavaş
 hatalar, 28. saniyede circuit OPEN, yaklaşık 10 saniyelik OPEN / HALF-OPEN
 döngüleri, 136. saniyede servis dönünce kurtarma.
+Circuit'in tam olarak hangi çağrıda açıldığı bu koşuda ölçülmedi; metriklerle
+yapılan ayrı bir koşuda sayımlar doğrulandı (bkz. docs/asama8-notlar.md).
+
+## Test sırasında Grafana'dan izleme
+Testi çalıştırırken http://localhost:3000 adresinde Grafana'yı
+(**Dashboards → Banking → "Banking Platform - Genel Bakış"**, varsayılan
+kullanıcı `admin`) açık tutarsan aynı olay sayılarla görünür:
+- "Devre kesici durumu" paneli CLOSED → OPEN → HALF-OPEN geçişlerini gösterir.
+- "Circuit breaker çağrı sonuçları" paneli başarılı, başarısız ve
+  `not_permitted` (devre açıkken reddedilen) çağrıları ayırır.
+- "Transfer sonuçları" paneli `banking_transfers_total` sayacından,
+  başarısız transferlerin nedenini (`unavailable`, `circuit_open`) gösterir.
+- Gateway'deki rate limiter'ı yanlışlıkla aşarsan "HTTP 429" kutusu turuncuya döner.
+
+Prometheus 15 saniyede bir örnek aldığı için çok kısa süren HALF-OPEN durumu
+grafikte görünmeyebilir. Ayrıntılar için bkz. docs/asama8-notlar.md,
+"Metrikler ve İzleme (Prometheus + Grafana)".
 
 ## Neden tek sanal kullanıcı ve 1.2 sn bekleme?
 Gateway'de global bir rate limiter vardır (10 saniyede 10 istek). Daha hızlı veya

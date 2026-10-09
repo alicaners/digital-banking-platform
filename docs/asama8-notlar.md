@@ -774,14 +774,16 @@ Account Service'e boşuna yük bindirmeyip istemciye hızlı hata dönüyor.
   değil; normal hızda gecikmeyi ve kesinti davranışını doğruluyor. Çok
   kullanıcılı trafik altındaki davranış (örn. optimistic lock çakışmaları)
   hâlâ test edilmedi.
-- **Açık nokta: circuit'in hangi çağrıda açıldığı.** Yapılandırma
-  `sliding-window-size: 10`, `failure-rate-threshold: 50` ve her deneme ayrı
-  bir çağrı olarak sayıldığına göre, 17 başarılı çağrıdan sonra circuit'in
-  yaklaşık 5 başarısız çağrıda açılması beklenirdi. Oysa gözlemde, ilk üç
-  isteğin üçü de tam 3 denemeyle tamamlandı ve ilk hızlı red dördüncü istekte
-  görüldü. Bu fark şimdilik açıklanmadı; çağrı sayımı Prometheus/Grafana
-  metrikleri eklendiğinde (circuit breaker durumu ve çağrı sayıları) ayrıca
-  incelenecek.
+- **Circuit'in hangi çağrıda açıldığı (Prometheus metrikleriyle açıklandı).**
+  Yapılandırma `sliding-window-size: 10`, `failure-rate-threshold: 50` ve
+  `minimum-number-of-calls: 10`. Retry her denemeyi ayrı bir circuit breaker
+  çağrısı olarak saydırdığı için, bir transfer (3 deneme) pencereye 3 başarısız
+  çağrı ekliyor. Bu yüzden circuit, kesinti başladıktan sonra yaklaşık 5.
+  başarısız denemede, yani ikinci transferin ortasında açılıyor. Önceki k6
+  koşusunda "ilk üç istek 3 denemeyle tamamlandı, ilk hızlı red dördüncüde
+  görüldü" gözlemi bununla tam örtüşmüyor; o koşuda metrik toplanmadığı için
+  fark yeniden doğrulanamadı. Metriklerle yapılan ayrı bir koşu için bkz.
+  "Metrikler ve İzleme" bölümü, "Circuit breaker deneyi".
 - **136. saniyedeki 1003 ms'lik ilk başarılı transfer**, 2 başarısız deneme
   ve üçüncü denemede başarı olarak yorumlanıyor (2 × 500 ms bekleme); servis
   bu isteğin ortasında geri döndü.
@@ -939,3 +941,173 @@ header ekleme testi; consumer için üç test (header var, yok, şüpheli).
 - Logların toplanması/aranması (ELK, Loki gibi) bu çalışmanın kapsamı dışında;
   loglar şimdilik `docker logs` ile okunuyor. JSON format, ileride böyle bir
   araç eklemeyi kolaylaştırıyor.
+
+
+## Metrikler ve İzleme (Prometheus + Grafana)
+
+Loglar "bir istekte ne oldu" sorusunu cevaplıyor, ama "sistem şu an genel olarak
+nasıl davranıyor" sorusunu cevaplamıyor: saniyede kaç istek geliyor, devre
+kesici açık mı, rate limiter kaç isteği reddetti. Bunlar zaman içinde sayılan
+değerler olduğu için log yerine metrik olarak toplandı. Önceki bölümlerde
+yazılan davranışlar (circuit breaker, retry, TimeLimiter, rate limiter) bu
+sayede ilk kez sayılarla doğrulanabilir hale geldi.
+
+### Mimari
+
+- **Actuator + Micrometer:** Yedi servisin hepsi (api-gateway, auth, customer,
+  account, transaction, notification, eureka-server) `micrometer-registry-prometheus`
+  bağımlılığıyla `/actuator/prometheus` uç noktasında metrik yayıyor.
+  `management.endpoints.web.exposure.include: health,prometheus` ile yalnızca
+  bu iki uç nokta açık; `env`, `beans` gibi hassas uç noktalar kapalı.
+- **Ayrı yönetim portu (9100):** Metrikler uygulama portundan değil,
+  `management.server.port: 9100` ile ayrı bir porttan sunuluyor. Bu port
+  `docker-compose.yml` içinde host'a **yayımlanmıyor**; yalnızca Docker ağı
+  içinden erişilebiliyor. Böylece "dışarıya sadece Gateway (8080) açık" kuralı
+  korunuyor ve metrikler Gateway üzerinden internete çıkmıyor.
+- **Etiket:** `management.metrics.tags.application: ${spring.application.name}`
+  ile her metrik hangi servisten geldiğini taşıyor.
+- **Prometheus (pull modeli):** Servisler metrik göndermiyor; Prometheus her
+  15 saniyede bir yedi servisin 9100 portunu okuyor (`job: banking-services`).
+  Veri 7 gün saklanıyor. Host'ta yalnızca `127.0.0.1:9090` üzerinden
+  erişilebilir.
+- **Grafana:** `127.0.0.1:3000` üzerinde, yalnızca yerel makineden erişilebilir.
+  Veri kaynağı ve dashboard **dosyadan** tanımlanıyor (provisioning): `docker/grafana/provisioning`
+  altında veri kaynağı (uid `prometheus`) ve dashboard sağlayıcısı,
+  `docker/grafana/dashboards/banking-overview.json` içinde dashboard'un kendisi.
+  Böylece ortam sıfırdan kurulduğunda elle ayar yapmak gerekmiyor ve dashboard
+  git'te sürümlenebiliyor.
+
+### Doğrulama
+
+Metrik portunun gerçekten dışarıya kapalı olduğu iki komutla kontrol edildi:
+
+docker run --rm --network digital-banking-platform_banking-network curlimages/curl -s -o NUL -w “%{http_code}” http://banking-auth-service:9100/actuator/prometheus
+
+→ `200` (Docker ağı içinden erişilebiliyor; yedi servisin hepsi için denendi)
+
+curl http://localhost:9100/actuator/prometheus
+
+→ `Failed to connect` (host'tan erişilemiyor)
+
+Prometheus'un hedefler sayfasında yedi hedefin yedisi de `UP`.
+
+### Dashboard: "Banking Platform - Genel Bakış"
+
+Dashboard 10 saniyede bir yenileniyor ve şu panelleri içeriyor:
+
+- **Özet kutuları:** ayakta servis sayısı (7 beklenir), Gateway istek hızı,
+  rate limiter'ın verdiği HTTP 429 hızı, devre kesicilerin genel durumu
+  ("Hepsi kapalı" / "AÇIK VAR").
+- **Servis bazında istek hızı ve ortalama gecikme.** Prometheus'un kendi
+  scrape istekleri (`/actuator/*`) `http_server_requests` içinde de sayıldığı
+  için bu panellerde `uri!~"/actuator.*"` ile hariç tutuldu.
+- **Devre kesici durumu** (zaman çizelgesi: Kapalı / Yarı açık / Açık), çağrı
+  sonuçları (başarılı, başarısız, `not_permitted`), TimeLimiter zaman aşımları.
+- **Rate limiter'da kalan izin sayısı**, JVM heap ve CPU.
+- **Transfer sonuçları** (aşağıda anlatılan özel metrikten).
+
+
+### Özel metrik: `banking_transfers_total`
+
+Hazır HTTP metrikleri bir transferin **iş sonucunu** göstermiyor: transfer
+başarısız olsa bile HTTP 200 dönüyor (`status: FAILED`), yani HTTP istatistiği
+bu hataları görmüyor (bkz. k6 bölümündeki `http_req_failed` notu). Bu yüzden
+`TransactionService` içine bir Micrometer sayacı eklendi.
+
+- **Etiketler:** `status` (`completed` / `failed`) ve `reason`:
+   - `none`: başarılı transfer
+   - `rejected`: Account Service isteği iş kuralı nedeniyle reddetti (4xx,
+     yetersiz bakiye gibi)
+   - `unavailable`: servise ulaşılamadı ya da zaman aşımı
+   - `circuit_open`: devre kesici açık olduğu için çağrı hiç yapılmadı
+   - `unexpected`: beklenmeyen hata
+- **Sayaç, kayıt veritabanına yazıldıktan sonra artıyor** ve yalnızca yeni
+  oluşturulan işlemleri sayıyor. Aynı `Idempotency-Key` ile yapılan tekrar
+  istek (replay) mevcut kaydı döndürdüğü için sayaca eklenmiyor; Postman'de
+  aynı isteği tekrar göndererek doğrulandı.
+- **Sayaçlar başlangıçta sıfırla kaydediliyor.** Prometheus'ta `rate()` ve
+  `increase()`, bir seri ilk kez `N` değeriyle görünürse artışı sıfır sayıyor;
+  yani ilk başarısız transfer hiç görünmeyebilir. Bu yüzden beş kombinasyonun
+  hepsi constructor'da 0 olarak oluşturuluyor.
+- **Testler:** `TransactionServiceTest` içine dört test eklendi (başarı,
+  `RuntimeException` → `unavailable`, `CallNotPermittedException` →
+  `circuit_open`, mevcut idempotency key'in sayacı artırmaması). Servis genelinde
+  22 test geçiyor.
+
+### Circuit breaker deneyi (metriklerle)
+
+Kesinti k6 ile tek sanal kullanıcıdan transfer göndererek, Account Service
+container'ı durdurulup tekrar başlatılarak simüle edildi. Sayılar Prometheus
+sayaçlarından okundu:
+
+| Metrik | Değer |
+|---|---|
+| Başarılı çağrı | 100 |
+| Başarısız çağrı | 23 |
+| `not_permitted` (devre açıkken reddedilen) | 53 |
+| TimeLimiter zaman aşımı | 4 |
+
+Bu sayılardan çıkan sonuçlar:
+
+- **Retry denemeleri tek tek sayılıyor.** Pencere 10 çağrı, eşik %50, minimum 10
+  çağrı olduğu için devre, kesintinin başlamasından sonra yaklaşık 5. başarısız
+  denemede, yani ikinci transferin ortasında açılıyor. (Önceki k6 koşusundaki
+  "ilk üç istek tam 3 denemeyle bitti" gözlemiyle birebir uyuşmuyor; o koşuda
+  metrik yoktu, bu yüzden farkın nedeni yeniden doğrulanamadı.)
+- **Devre açıkken her transfer tek bir `not_permitted` üretiyor,** retry
+  yapılmıyor ve yanıt 20–40 ms'de dönüyor. Gerçek çağrı yapılan başarısız
+  transferler ise yaklaşık 1 saniye sürüyor (3 deneme + 2 × 500 ms bekleme).
+  Devre açıkken reddedilen 53 çağrı için, aksi halde en az 57 saniye bekleme
+  harcanacaktı.
+- **`TimeoutException` retry edilmiyor.** Durdurulan container'ın IP'sine
+  bağlanmaya çalışan çağrılar takılıp kalıyor ve 5 saniyelik TimeLimiter
+  tarafından kesiliyor (4 zaman aşımı).
+- **HALF_OPEN durumunda 3 çağrıya izin veriliyor.** Bunlar üç ayrı transferin
+  birer çağrısı olabileceği gibi, tek bir transferin 3 retry denemesi de olabiliyor.
+- **Toparlanma:** Container yeniden başlatıldıktan sonra ilk başarılı transfer
+  yaklaşık 74 saniye sürdü. Bunun büyük kısmı Eureka kaydı ve LoadBalancer
+  önbelleğinin yenilenmesi; devre kesicinin bekleme süresi tek başına değil.
+
+
+### Karşılaşılan pratik sorunlar
+
+- **Başında boşluk olan klasör adı:** IntelliJ'de "New Directory" ile klasör
+  adı `   grafana` (başında boşluk) olarak girildi. Docker, bulamadığı yolu
+  host'ta boş bir klasör olarak oluşturdu ve Grafana'ya boş provisioning
+  dizini bağlandı; veri kaynağı listesi boş geldi. Klasör doğru adla yeniden
+  taşınıp `docker compose restart grafana` yapılınca düzeldi.
+- **State-timeline ve eşik renkleri:** Devre kesici durumu panelinde renk modu
+  `thresholds` iken değer eşlemesindeki metin ("Kapalı") gösterilmiyor, yerine
+  "-∞+" yazıyordu. Renk modu `fixed` yapılıp renkler eşlemeye taşındı.
+- **Yeni seride `rate()`:** Daha önce hiç görünmemiş bir sayaç ilk kez
+  göründüğünde `rate()` sıfır döner (429 kutusu ilk döngüde 0.00 kaldı). Kutu
+  `or vector(0)` ile korundu, transfer sayaçları ise başlangıçta sıfırlanarak
+  kaydedildi (yukarıda).
+- **Scrape istekleri de sayılıyor:** `http_server_requests` Prometheus'un kendi
+  `/actuator/prometheus` isteklerini de içeriyor; panellerde hariç tutuldu.
+- **Rate limiter 4xx kayıtları:** Gateway'in 429 yanıtları `status="429"`,
+  `uri="UNKNOWN"` etiketiyle kaydediliyor. Ayrı bir Gateway sayacı yazmak
+  yerine bu hazır metrik kullanıldı.
+- **Eureka bağlantıları:** Eureka paneldeki instance'ların durum/sağlık
+  bağlantıları artık 9100 portunu gösteriyor (`management.port` metadata'sı).
+  Yalnızca görünüş sorunu; servis keşfi etkilenmiyor.
+
+### Sınırlamalar
+
+- **p95 gecikme yok:** Spring varsayılan olarak histogram kovaları yayınlamadığı
+  için dashboard yalnızca ortalama gecikmeyi gösteriyor. Ortalama, nadir yavaş
+  istekleri gizler; yüzdelik dilimler için histogram açılması gerekir.
+- **Uyarı (alert) kuralı yok:** Metrikler toplanıyor ve görselleştiriliyor ama
+  devre kesici açıldığında kimseye bildirim gitmiyor (Alertmanager yok).
+- **Kısa durumlar kaçabilir:** Prometheus 15 saniyede bir örnek aldığı için kısa
+  süren HALF_OPEN durumu grafikte hiç görünmeyebilir.
+- **Varsayılan Grafana parolası:** `GRAFANA_ADMIN_PASSWORD` verilmezse
+  `admin/admin` kullanılıyor. Grafana yalnızca `127.0.0.1`'e bağlı olduğu için
+  yerel geliştirmede kabul edilebilir; ortak bir sunucuda mutlaka `.env`
+  üzerinden değiştirilmeli.
+- **Veri saklama:** Prometheus verisi 7 gün tutuluyor (`prometheus-data`
+  volume'ü). Uzun vadeli analiz için uygun değil.
+- **Dashboard'u arayüzden düzenleme:** `allowUiUpdates: false` olduğu için
+  Grafana arayüzünden yapılan değişiklikler kalıcı olmuyor; değişiklik JSON
+  dosyasında yapılıp commit edilmeli (dosya 30 saniyede bir yeniden okunuyor,
+  restart gerekmiyor).

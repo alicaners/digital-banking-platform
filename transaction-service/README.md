@@ -168,6 +168,29 @@ catch blokları, Account Service çağrısı başarısız olduğunda nedenini
 loglar (bkz. docs/asama8-notlar.md, "Yapılandırılmış Loglama ve
 correlationId").
 
+## Metrikler
+Servis, Micrometer ile Prometheus formatında metrik yayınlar. Metrikler
+uygulama portundan (8084) değil, ayrı bir yönetim portundan (9100,
+`/actuator/prometheus`) sunulur; bu port host'a yayımlanmaz, yalnızca Docker
+network'ü içinden Prometheus okur.
+
+Hazır metriklere (HTTP istekleri, JVM, Resilience4j devre kesici ve
+TimeLimiter) ek olarak bir özel sayaç vardır: `banking_transfers_total`.
+Hazır HTTP metrikleri transferin iş sonucunu göstermez, çünkü başarısız bir
+transfer de HTTP 200 (`status: FAILED`) döner. Sayaç iki etiket taşır:
+- `status`: `completed` ya da `failed`
+- `reason`: `none` (başarılı), `rejected` (iş kuralı reddi, 4xx),
+  `unavailable` (servise ulaşılamadı / zaman aşımı), `circuit_open` (devre
+  açık, çağrı yapılmadı), `unexpected` (beklenmeyen hata)
+
+Sayaç, transfer kaydı veritabanına yazıldıktan sonra artar; aynı
+`Idempotency-Key` ile gelen tekrar istek (mevcut kaydı döndürür) sayılmaz.
+Beş etiket kombinasyonu uygulama açılırken 0 olarak kaydedilir; aksi halde
+Prometheus'ta ilk başarısız transfer `rate()` / `increase()` sorgularında
+görünmeyebilir. Grafana'daki "Transfer sonuçları" panelleri bu sayaçtan
+beslenir (bkz. docs/asama8-notlar.md, "Metrikler ve İzleme (Prometheus +
+Grafana)").
+
 ## Eşzamanlılık (Optimistic Locking)
 Account Service tarafında, aynı hesabın eşzamanlı güncellenmeye
 çalışılması durumunda oluşan çakışmalar (`OptimisticLockException`),
@@ -197,7 +220,11 @@ etkilememesi, ve cache'ten dönen bir FAILED transferin `failureReason`'ını
 koruması. Ayrıca `CorrelationIdFilterTest`, `FeignCorrelationIdInterceptorTest`
 ve `TransactionEventProducerCorrelationTest`, correlationId'nin üretilmesini,
 Feign çağrısına ve Kafka mesajının header'ına taşınmasını ve MDC'nin istek
-sonunda temizlenmesini doğrular (bkz. docs/asama8-notlar.md).
+sonunda temizlenmesini doğrular (bkz. docs/asama8-notlar.md). Ayrıca
+`TransactionServiceTest` içindeki dört test `banking_transfers_total`
+sayacını doğrular: başarılı transfer `completed/none`, servis hatası
+`failed/unavailable`, açık devre `failed/circuit_open` olarak sayılır ve
+mevcut bir `Idempotency-Key` ile gelen tekrar istek sayacı artırmaz.
 
 ## API Dokümantasyonu
 http://localhost:8084/swagger-ui.html

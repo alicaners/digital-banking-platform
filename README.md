@@ -73,10 +73,12 @@ Altyapı servisleri (Postgres, Redis, Zookeeper, Kafka, Eureka Server)
 için healthcheck tanımlıdır - uygulama servisleri, bu servisler sadece
 "başlamış" değil gerçekten "hazır" (healthy) olana kadar bekler.
 
-**Güvenlik notu:** Sadece api-gateway'in portu (8080) dışarıya açıktır.
-Diğer altı mikroservis yalnızca Docker network'ü içinden erişilebilir —
-tüm istekler zorunlu olarak Gateway üzerinden (ve dolayısıyla JWT
-kontrolünden) geçer.
+**Güvenlik notu:** Uygulama tarafında sadece api-gateway'in portu (8080)
+dışarıya açıktır. Diğer altı mikroservis yalnızca Docker network'ü
+içinden erişilebilir — tüm istekler zorunlu olarak Gateway üzerinden (ve
+dolayısıyla JWT kontrolünden) geçer. İzleme araçları (Prometheus 9090,
+Grafana 3000) yalnızca yerel makineden (`127.0.0.1`) erişilebilir; servislerin
+metrik portu (9100) ise host'a hiç yayımlanmaz.
 
 **Alternatif — Her servisi elle, IntelliJ/terminal üzerinden çalıştırmak:**
 
@@ -136,6 +138,33 @@ docker logs banking-account-service 2>&1 | findstr <correlationId>
 ```
 
 (bkz. docs/asama8-notlar.md, "Yapılandırılmış Loglama ve correlationId").
+
+## Metrikler ve İzleme
+
+Yedi servis de Micrometer ile Prometheus formatında metrik yayınlar.
+Metrikler uygulama portundan değil, ayrı bir yönetim portundan (9100)
+sunulur; bu port host'a açılmaz, yalnızca Docker network'ü içinden
+Prometheus erişir. `docker compose up -d --build` ile Prometheus ve
+Grafana da otomatik ayağa kalkar:
+
+| Araç | Adres | Not |
+|---|---|---|
+| Prometheus | http://localhost:9090 | Yalnızca yerel makineden, 15 sn'de bir okur, 7 gün saklar |
+| Grafana | http://localhost:3000 | Yalnızca yerel makineden, kullanıcı `admin` |
+
+Grafana'ya girince **Dashboards → Banking → "Banking Platform - Genel
+Bakış"** açılır. Veri kaynağı ve dashboard dosyadan otomatik yüklenir
+(`docker/grafana/`), elle ayar gerekmez. Dashboard: ayakta servis sayısı,
+servis bazında istek hızı ve gecikme, rate limiter (HTTP 429), circuit
+breaker durumu ve çağrı sonuçları, TimeLimiter zaman aşımları, JVM/CPU ve
+transfer sonuçları (`banking_transfers_total` özel metriği: tamamlanan /
+başarısız, nedenine göre).
+
+Grafana parolası varsayılan olarak `admin`'dir ve servis yalnızca
+localhost'a bağlıdır. Ortak bir makinede çalıştırılacaksa `.env` içine
+`GRAFANA_ADMIN_PASSWORD=<güçlü parola>` eklenmelidir (isteğe bağlı).
+
+(bkz. docs/asama8-notlar.md, "Metrikler ve İzleme (Prometheus + Grafana)").
 
 ## Atomic Transfer ve Idempotency
 
@@ -216,11 +245,11 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 
 - **Docker**: Her servis, multi-stage build ile optimize edilmiş
   (165-206MB) bağımsız bir image olarak build edilebiliyor.
-- **Docker Compose**: Tüm sistem (11 container — 4 altyapı + 7
-  uygulama), tek bir `docker compose up -d --build` komutuyla, ortak
-  bir Docker network'ü üzerinden birbirine bağlı şekilde ayağa kalkıyor.
-  Altyapı servisleri (Eureka Server dahil) için healthcheck tanımlı,
-  uygulama servisleri bunların gerçekten hazır olmasını bekliyor.
+- **Docker Compose**: Tüm sistem (13 container — 4 altyapı + 7
+  uygulama + Prometheus ve Grafana), tek bir `docker compose up -d --build`
+  komutuyla, ortak bir Docker network'ü üzerinden birbirine bağlı şekilde
+  ayağa kalkıyor. Altyapı servisleri (Eureka Server dahil) için healthcheck
+  tanımlı, uygulama servisleri bunların gerçekten hazır olmasını bekliyor.
 - **GitHub Actions (CI)**: Her push'ta, yedi servisin her biri ayrı
   ayrı otomatik olarak derlenip test ediliyor (bkz. yukarıdaki badge).
 
@@ -231,7 +260,8 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 Java 21, Spring Boot 3.3.4, Spring Cloud 2023.0.3, PostgreSQL 16,
 Kafka, Redis, Docker, Docker Compose, GitHub Actions, JWT (jjwt),
 OpenFeign, Resilience4j, Spring Retry, JUnit 5, Mockito, Testcontainers,
-Springdoc OpenAPI, k6, SLF4J MDC, Logstash Logback Encoder (JSON log)
+Springdoc OpenAPI, k6, SLF4J MDC, Logstash Logback Encoder (JSON log),
+Micrometer, Prometheus, Grafana
 
 ## Durum
 
@@ -262,4 +292,8 @@ docs/asama8-notlar.md, "Yük Testi (k6)"). Ardından yapılandırılmış (JSON)
 loglama ve servisler arası correlationId izlenebilirliği eklendi
 (Gateway'den Kafka'ya kadar tek kimlik); bu çalışma sırasında bulunan bir
 zaman aşımı (TimeLimiter) hatası da düzeltildi (bkz. docs/asama8-notlar.md,
-"Yapılandırılmış Loglama ve correlationId").
+"Yapılandırılmış Loglama ve correlationId"). Son olarak Prometheus ve
+Grafana ile metrik izleme eklendi: servis metrikleri, devre kesici ve rate
+limiter davranışı ve transfer sonuçları bir dashboard'da görülebiliyor; bu
+sayede k6 sırasında gözlenen circuit breaker davranışı sayılarla açıklandı
+(bkz. docs/asama8-notlar.md, "Metrikler ve İzleme (Prometheus + Grafana)").
