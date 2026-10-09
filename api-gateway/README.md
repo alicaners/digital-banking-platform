@@ -11,9 +11,17 @@ mvnw spring-boot:run
 
 ## Güvenlik
 Gateway, gelen isteklerdeki Authorization header'ını kontrol eder.
-/api/auth/register ve /api/auth/login hariç tüm istekler geçerli
-bir JWT token gerektirir. Token eksik ya da geçersizse istek ilgili
-servise hiç ulaştırılmadan 401 Unauthorized döner.
+/api/auth/register, /api/auth/login, /api/auth/refresh ve
+/api/auth/logout hariç tüm istekler geçerli bir JWT token gerektirir.
+Token eksik ya da geçersizse istek ilgili servise hiç ulaştırılmadan
+401 Unauthorized döner.
+
+`/api/auth/refresh` ve `/api/auth/logout` bilerek JWT istemez: bu
+isteklerde kimlik kanıtı, body'deki refresh token'dır ve access token'ı
+süresi dolmuş bir kullanıcı da yeni token alabilmeli ya da çıkış
+yapabilmelidir. Rate limiter bu iki yola da uygulanır (bkz. "Rate
+Limiting"); refresh token'ı kaba kuvvetle denemek bu sınırla kısıtlıdır
+(bkz. docs/asama8-notlar.md, "Refresh Token ve Logout").
 
 Token doğrulandıktan sonra, Gateway içindeki `userId` ve `role`
 bilgilerini çıkarıp isteği `X-User-Id` ve `X-User-Role` header'larıyla
@@ -24,6 +32,12 @@ gerçek değerle geçersiz kılınır. Downstream servisler (Customer,
 Account, Transaction), bu header'ları kullanarak kendi ownership/
 yetkilendirme kontrollerini yapar (bkz. docs/asama8-notlar.md,
 "Gün 1 — Konu B").
+
+`JwtAuthenticationFilterTest`, bu kuralları doğrular: dört auth yolu
+(`register`, `login`, `refresh`, `logout`) token'sız geçer; korumalı bir yol
+token'sız ya da bozuk token'la 401 alır; geçerli token'da `X-User-Id` ve
+`X-User-Role` header'ları eklenir; `/internal/` yolu geçerli token'la bile
+403 alır.
 
 ## İç Servis Çağrılarının Korunması (`/internal/**`)
 Servisler arası çağrılar için kullanılan endpoint'ler (örn.
@@ -84,7 +98,9 @@ cevapta tek header olmasını doğrular.
 
 ## Örnek Kullanım
 POST http://localhost:8080/api/auth/register  (token gerekmez)
-POST http://localhost:8080/api/auth/login     (token gerekmez, JWT döner)
+POST http://localhost:8080/api/auth/login     (token gerekmez, access token ve refresh token döner)
+POST http://localhost:8080/api/auth/refresh   (token gerekmez, body: refreshToken)
+POST http://localhost:8080/api/auth/logout    (token gerekmez, body: refreshToken)
 GET  http://localhost:8080/api/customers      (Authorization: Bearer <token> gerekir)
 
 ## API Dokümantasyonu (Merkezi)

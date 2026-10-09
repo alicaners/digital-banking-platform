@@ -1111,3 +1111,131 @@ Bu sayılardan çıkan sonuçlar:
   Grafana arayüzünden yapılan değişiklikler kalıcı olmuyor; değişiklik JSON
   dosyasında yapılıp commit edilmeli (dosya 30 saniyede bir yeniden okunuyor,
   restart gerekmiyor).
+
+
+
+
+## Refresh Token ve Logout
+
+Önceden login tek bir JWT veriyordu ve ömrü 1 saatti. Bunun iki sorunu vardı:
+çıkış (logout) diye bir kavram yoktu, ve çalınan bir token 1 saat boyunca
+geçerliydi. Ömrü kısaltmak kullanıcıyı sık sık şifre girmeye zorlayacağı için,
+iki token'lı klasik düzene geçildi.
+
+### Tasarım
+
+| | Access token | Refresh token |
+|---|---|---|
+| Amaç | Her API isteğinde kimlik kanıtı | Yeni access token almak |
+| Ömür | 15 dakika (`JWT_EXPIRATION`, varsayılan 900000 ms) | 7 gün (`JWT_REFRESH_EXPIRATION`, varsayılan 604800000 ms) |
+| Biçim | JWT (eskisi gibi) | 32 rastgele bayt (`SecureRandom`), Base64 URL; içinde bilgi taşımaz |
+| Saklama | Hiçbir yerde, Gateway imzayı doğrular | auth_db `refresh_tokens` tablosunda, **yalnızca SHA-256 hash'i** |
+
+- **Hash'leme:** Token düz haliyle saklanmıyor; veritabanı sızsa bile token'lar
+  kullanılamaz. Şifrelerde BCrypt var ama burada SHA-256 seçildi: token zaten
+  yüksek entropili rastgele bir değer (kaba kuvvetle tahmin edilemez) ve her
+  `/refresh` çağrısında hash'ten aranabilmesi için hash'in deterministik olması
+  gerekiyor, BCrypt buna uygun değil.
+- **Rotation:** Her `/refresh` çağrısında eski token iptal edilir ve yeni bir
+  refresh token verilir; bir token tek kullanımlıktır.
+- **Reuse tespiti:** İptal edilmiş bir token tekrar gelirse, çalınmış olabileceği
+  varsayılır ve kullanıcının **tüm aktif refresh token'ları iptal edilir**
+  (hem saldırgan hem gerçek kullanıcı yeniden login olmak zorunda kalır).
+  `RefreshTokenService.rotate` içinde `@Transactional(noRollbackFor =
+  InvalidRefreshTokenException.class)` kullanıldı; bu olmasa reuse'da fırlatılan
+  hata transaction'ı geri alır ve "hepsini iptal et" işlemi kaybolurdu.
+- **Tablo:** `refresh_tokens` (`id`, `token_hash` unique, `user_id` indeksli,
+  `expires_at`, `revoked`, `created_at`). `ddl-auto: update` olduğu için entity
+  eklenince tablo kendiliğinden oluştu, ayrı bir SQL gerekmedi.
+
+### Endpoint'ler
+
+| Endpoint | Gövde | Yanıt |
+|---|---|---|
+| `POST /api/auth/login` | kullanıcı adı, şifre | 200: `token` + yeni **`refreshToken`** |
+| `POST /api/auth/refresh` | `{"refreshToken": "..."}` | 200: yeni `token` + yeni `refreshToken`; geçersiz/iptal/süresi dolmuş: 401 |
+| `POST /api/auth/logout` | `{"refreshToken": "..."}` | 204 (bilinmeyen ya da zaten iptal edilmiş token için de 204) |
+
+- Login yanıtında `token` alanının adı değiştirilmedi, yanına `refreshToken`
+  eklendi; böylece k6 scriptleri ve mevcut istemciler bozulmadı.
+- **Logout idempotent:** Bilinmeyen token için hata dönmüyor. Böylece logout
+  güvenle tekrarlanabiliyor ve bir token'ın var olup olmadığı dışarıya sızmıyor.
+- **Gateway:** `/api/auth/refresh` ve `/api/auth/logout` JWT istemeyen açık yollara
+  eklendi. Kimlik kanıtı zaten body'deki refresh token; access token'ı süresi
+  dolmuş bir kullanıcı da çıkış yapabilmeli ve yenileme isteyebilmeli. Rate
+  limiter (-2) JWT filtresinden (-1) önce çalıştığı için bu iki yol de
+  10 saniyede 10 istek sınırına tabi; refresh token'ı kaba kuvvetle denemek
+  bu sınırla kısıtlı.
+
+
+### Doğrulama
+
+Docker'da yeniden derlenen auth-service ve api-gateway ile, Postman üzerinden
+gerçek istekler gönderildi:
+
+| Senaryo | Sonuç |
+|---|---|
+| Login | 200, `token` + `refreshToken` |
+| Refresh (R1) | 200, R1'den farklı yeni `refreshToken` (R2) |
+| Eski R1'i tekrar kullanmak | 401 `Geçersiz refresh token` |
+| R2'yi kullanmak (reuse sonrası) | 401; veritabanında iki satırın ikisi de `revoked = t` |
+| Logout (R3) | 204 |
+| Logout sonrası R3 ile refresh | 401 |
+| Logout'u tekrarlamak | 204 |
+
+Veritabanından doğrulandı: refresh token kayıtlarının `expires_at` değeri
+oluşturulma zamanından tam 7 gün sonrası; access token'ın `exp − iat` farkı
+900 saniye (15 dakika).
+
+Birim testleri: auth-service'te `RefreshTokenServiceTest` (9 test: yalnızca hash'in
+saklanması, her seferinde farklı token, geçerli token'ın rotation'ı, bilinmeyen
+token, iptal edilmiş token'da toplu iptal, süresi dolmuş token, logout'un üç hâli)
+ve `AuthServiceTest`'e eklenen testler (login'in refresh token döndürmesi,
+refresh, geçersiz token'da access token üretilmemesi, kullanıcının silinmiş
+olması, logout). Gateway'de yeni `JwtAuthenticationFilterTest` (8 test): dört auth
+yolunun token'sız geçmesi, korumalı yolun token'sız ya da bozuk token'la 401
+alması, geçerli token'da `X-User-Id`/`X-User-Role` header'larının eklenmesi,
+`/internal/` yolunun geçerli token'la bile 403 alması. Gateway'de bu filtre için
+daha önce hiç test yoktu. Toplam: auth-service 23, api-gateway 13 test.
+
+### Karşılaşılan pratik sorunlar
+
+- **Test ayar dosyası:** `auth-service/src/test/resources/application.yml`,
+  ana yml'den bağımsız kendi `jwt` bloğuna sahip. Yeni
+  `jwt.refresh-expiration` anahtarı oraya da eklenmeyince Spring bağlamı
+  `Could not resolve placeholder` ile açılmadı. Ana yml'deki varsayılan test
+  ortamında görünmüyor.
+- **Gateway testleri yerelde `JWT_SECRET` ister:** Gateway'in `jwt.secret:
+  ${JWT_SECRET}` değeri test ortamında tanımlı değil; `ApiGatewayApplicationTests`
+  terminalde değişken yokken açılmıyor (bu çalışmadan önce de böyleydi, CI
+  değişkeni ayrıca veriyor). Yerelde test için değişken geçici olarak verilip
+  hemen temizlendi (Compose değişken önceliği için bkz. "Yapılandırılmış
+  Loglama" bölümü).
+- **Docker derlemesi ağ hatası:** Dockerfile'daki `mvn clean package` her seferinde
+  bağımlılıkları yeniden indiriyor (bağımlılık için ayrı bir katman yok). Üç
+  servisi aynı anda derlerken Maven Central bağlantısı koptu
+  (`Remote host terminated the handshake`); servisler tek tek derlenince geçti.
+  Başarısız derleme çalışan container'ları etkilemedi.
+
+### Sınırlamalar
+
+- **Logout sonrası access token 15 dakika daha geçerli.** Gateway token'ı
+  stateless doğruluyor; çıkış yapılmış bir access token'ı reddetmek için JWT
+  kimliğinin (jti) Redis'te bir kara listede tutulması gerekirdi. Bu yapılmadı;
+  sınırın pratik etkisi, ömrü 1 saatten 15 dakikaya indirilerek azaltıldı.
+- **Logout edilmiş token'ın tekrar kullanılması reuse sayılıyor.** İptal edilmiş
+  bir token (logout ile iptal edilmiş olsa bile) `/refresh`'e gelirse kullanıcının
+  diğer cihazlardaki oturumları da düşüyor. Güvenli taraf, ama kullanıcı
+  açısından sürpriz olabilir. Gecikmiş bir istek yüzünden de tetiklenebilir.
+- **Eşzamanlı yenileme yarışı:** Aynı refresh token ile aynı anda iki `/refresh`
+  isteği gelirse ikisi de token'ı "iptal edilmemiş" okuyabilir ve ikisi de yeni
+  token alabilir. Veritabanı satır kilidi (`PESSIMISTIC_WRITE`) eklenmedi.
+- **Temizlik işi yok:** Süresi dolmuş ve iptal edilmiş kayıtlar tabloda kalıyor;
+  periyodik silen bir iş eklenmedi.
+- **"Tüm cihazlardan çıkış" endpoint'i yok** ve aktif oturumlar listelenmiyor
+  (altyapısı var: `revokeAllByUserId`).
+- **`refresh_tokens.user_id` için yabancı anahtar yok;** servisler arası değil ama
+  aynı veritabanında olduğu için eklenebilirdi.
+- **İstemci tarafı saklama:** Refresh token yanıt gövdesinde dönüyor; tarayıcı
+  istemcisinde nerede saklanacağı (örn. HttpOnly cookie) istemcinin sorumluluğunda,
+  bu çalışma kapsamında değil.

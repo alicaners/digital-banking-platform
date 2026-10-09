@@ -39,7 +39,7 @@ graph TD
 |---|---|---|---|
 | eureka-server | ✅ Tamamlandı | 8761 | Service Discovery |
 | api-gateway | ✅ Tamamlandı | 8080 | Tek giriş noktası + JWT doğrulama + Rate Limiting + Merkezi Swagger |
-| auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi (userId/role claim'leriyle) |
+| auth-service | ✅ Tamamlandı | 8081 | Kimlik doğrulama, JWT üretimi (userId/role claim'leriyle), refresh token (rotation) ve logout |
 | customer-service | ✅ Tamamlandı | 8082 | Müşteri yönetimi (CRUD), ownership tabanlı yetkilendirme, sayfalama |
 | account-service | ✅ Tamamlandı | 8083 | Hesap yönetimi, atomic transfer, ownership tabanlı yetkilendirme, Redis cache, sayfalama |
 | transaction-service | ✅ Tamamlandı | 8084 | Para transferi, Idempotency-Key, Circuit Breaker, Retry |
@@ -93,11 +93,20 @@ metrik portu (9100) ise host'a hiç yayımlanmaz.
 
 ## Güvenlik
 
-Tüm istekler API Gateway üzerinden geçer. `/api/auth/register` ve
-`/api/auth/login` hariç her endpoint, geçerli bir JWT token
-gerektirir. Şifreler BCrypt ile hash'lenerek saklanır. Gateway
-ayrıca tüm isteklere 10 saniyede 10 istek sınırı (Rate Limiting)
-uygular.
+Tüm istekler API Gateway üzerinden geçer. `/api/auth/register`,
+`/api/auth/login`, `/api/auth/refresh` ve `/api/auth/logout` hariç her
+endpoint, geçerli bir JWT token gerektirir. Şifreler BCrypt ile
+hash'lenerek saklanır. Gateway ayrıca tüm isteklere 10 saniyede 10 istek
+sınırı (Rate Limiting) uygular.
+
+**Oturum yönetimi**: Login iki token verir. Access token (JWT) 15 dakika
+geçerlidir; refresh token 7 gün geçerli, rastgele üretilmiş bir değerdir ve
+veritabanında yalnızca hash'i saklanır. `/api/auth/refresh` her çağrıda
+refresh token'ı döndürür (rotation, her token tek kullanımlık); iptal edilmiş
+bir token tekrar kullanılırsa kullanıcının tüm refresh token'ları iptal edilir.
+`/api/auth/logout` refresh token'ı iptal eder. Logout sonrası mevcut access
+token süresi dolana kadar (en fazla 15 dakika) geçerli kalır (bkz.
+docs/asama8-notlar.md, "Refresh Token ve Logout").
 
 **Yetkilendirme (Authorization)**: JWT token, `userId` ve `role`
 bilgilerini taşır; Gateway bunları doğruladıktan sonra `X-User-Id`/
@@ -224,7 +233,9 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 
 - **Unit testler (Mockito)**: Auth, Account ve Transaction Service'te
   iş mantığının kritik senaryolarını (ownership, atomic transfer,
-  idempotency dahil) kapsayan testler.
+  idempotency, refresh token rotation ve reuse tespiti dahil) kapsayan
+  testler; Gateway'de JWT filtresinin hangi yolların açık, hangilerinin
+  korumalı olduğunu doğrulayan testler.
 - **correlationId testleri**: Her serviste filtre/interceptor için,
   Kafka tarafında producer ve consumer için birim testleri (id üretimi,
   şüpheli değerin reddedilmesi, MDC'nin istek sonunda temizlenmesi).
@@ -297,3 +308,6 @@ Grafana ile metrik izleme eklendi: servis metrikleri, devre kesici ve rate
 limiter davranışı ve transfer sonuçları bir dashboard'da görülebiliyor; bu
 sayede k6 sırasında gözlenen circuit breaker davranışı sayılarla açıklandı
 (bkz. docs/asama8-notlar.md, "Metrikler ve İzleme (Prometheus + Grafana)").
+Ardından auth-service'e kısa ömürlü access token, refresh token (rotation ve
+reuse tespitiyle) ve logout eklendi (bkz. docs/asama8-notlar.md, "Refresh
+Token ve Logout").
