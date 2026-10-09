@@ -16,6 +16,8 @@ import com.banking.transaction.repository.TransactionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -29,19 +31,32 @@ public class TransactionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
+    static final String TRANSFER_METRIC = "banking.transfers";
+
     private final TransactionRepository transactionRepository;
     private final AccountServiceClient accountServiceClient;
     private final AccountServiceExecutor accountServiceExecutor;
     private final TransactionEventProducer eventProducer;
+    private final MeterRegistry meterRegistry;
 
     public TransactionService(TransactionRepository transactionRepository,
                               AccountServiceClient accountServiceClient,
                               AccountServiceExecutor accountServiceExecutor,
-                              TransactionEventProducer eventProducer) {
+                              TransactionEventProducer eventProducer,
+                              MeterRegistry meterRegistry) {
         this.transactionRepository = transactionRepository;
         this.accountServiceClient = accountServiceClient;
         this.accountServiceExecutor = accountServiceExecutor;
         this.eventProducer = eventProducer;
+        this.meterRegistry = meterRegistry;
+
+        // Tüm etiket kombinasyonları 0 değeriyle baştan kaydediliyor. Sayaç ilk
+        // olayda doğarsa Prometheus'un rate() hesabı o ilk olayı göremez.
+        transferCounter("completed", "none");
+        transferCounter("failed", "rejected");
+        transferCounter("failed", "unavailable");
+        transferCounter("failed", "circuit_open");
+        transferCounter("failed", "unexpected");
     }
 
     public TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey) {
@@ -68,6 +83,9 @@ public class TransactionService {
         transaction.setAmount(request.getAmount());
         transaction.setIdempotencyKey(idempotencyKey);
 
+        // Metrik etiketi: başarılıysa "none", başarısızsa nedenin kısa kategorisi
+        String outcomeReason = "none";
+
         try {
             InternalTransferRequest transferRequest = new InternalTransferRequest(
                     request.getSenderAccountId(),
@@ -88,6 +106,7 @@ public class TransactionService {
                     e.status(), e.getMessage());
             transaction.setFailureReason(extractErrorMessage(e));
             transaction.setStatus(TransactionStatus.FAILED);
+            outcomeReason = (e.status() >= 400 && e.status() < 500) ? "rejected" : "unavailable";
 
         } catch (NonRetryableException e) {
 
@@ -98,12 +117,14 @@ public class TransactionService {
                             : e.getMessage()
             );
             transaction.setStatus(TransactionStatus.FAILED);
+            outcomeReason = "rejected";
 
         } catch (CallNotPermittedException e) {
 
             log.warn("Circuit breaker açık, Account Service çağrısı yapılmadı");
             transaction.setFailureReason("Hesap servisi şu anda geçici olarak kullanılamıyor, lütfen birazdan tekrar deneyin");
             transaction.setStatus(TransactionStatus.FAILED);
+            outcomeReason = "circuit_open";
 
         } catch (RuntimeException e) {
 
@@ -115,12 +136,14 @@ public class TransactionService {
                             : "Hesap servisi şu anda kullanılamıyor"
             );
             transaction.setStatus(TransactionStatus.FAILED);
+            outcomeReason = "unavailable";
 
         } catch (Exception e) {
 
             log.error("Account Service çağrısında beklenmeyen hata", e);
             transaction.setFailureReason("Beklenmeyen bir hata oluştu: " + e.getMessage());
             transaction.setStatus(TransactionStatus.FAILED);
+            outcomeReason = "unexpected";
         }
 
         try {
@@ -136,6 +159,13 @@ public class TransactionService {
             return toResponse(raceWinner);
         }
 
+        // Sayaç kayıt başarılı olduktan sonra artıyor; idempotency tekrarları ve
+        // yarışı kaybeden istekler sayılmıyor.
+        transferCounter(
+                transaction.getStatus() == TransactionStatus.COMPLETED ? "completed" : "failed",
+                outcomeReason
+        ).increment();
+
         try {
             eventProducer.publish(new TransactionEvent(
                     transaction.getId(),
@@ -150,6 +180,14 @@ public class TransactionService {
         }
 
         return toResponse(transaction);
+    }
+
+    private Counter transferCounter(String status, String reason) {
+        return Counter.builder(TRANSFER_METRIC)
+                .description("Yeni oluşturulan transferlerin sonucu (idempotency tekrarları sayılmaz)")
+                .tag("status", status)
+                .tag("reason", reason)
+                .register(meterRegistry);
     }
 
     private boolean matchesRequest(Transaction existing, TransferRequest request) {

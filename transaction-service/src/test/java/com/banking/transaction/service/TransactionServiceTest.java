@@ -12,10 +12,13 @@ import com.banking.transaction.exception.IdempotencyConflictException;
 import com.banking.transaction.executor.AccountServiceExecutor;
 import com.banking.transaction.kafka.TransactionEventProducer;
 import com.banking.transaction.repository.TransactionRepository;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -42,7 +45,8 @@ class TransactionServiceTest {
     @Mock
     private TransactionEventProducer eventProducer;
 
-    @InjectMocks
+    private SimpleMeterRegistry meterRegistry;
+
     private TransactionService transactionService;
 
     private TransferRequest transferRequest;
@@ -52,6 +56,15 @@ class TransactionServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        transactionService = new TransactionService(
+                transactionRepository,
+                accountServiceClient,
+                accountServiceExecutor,
+                eventProducer,
+                meterRegistry
+        );
+
         transferRequest = new TransferRequest();
         transferRequest.setSenderAccountId(1L);
         transferRequest.setReceiverAccountId(2L);
@@ -65,6 +78,22 @@ class TransactionServiceTest {
                     Supplier<?> supplier = invocation.getArgument(0);
                     return supplier.get();
                 });
+    }
+
+    private double transferCount(String status, String reason) {
+        Counter counter = meterRegistry.find(TransactionService.TRANSFER_METRIC)
+                .tag("status", status)
+                .tag("reason", reason)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
+    private double totalTransferCount() {
+        return meterRegistry.find(TransactionService.TRANSFER_METRIC)
+                .counters()
+                .stream()
+                .mapToDouble(Counter::count)
+                .sum();
     }
 
     @Test
@@ -261,5 +290,73 @@ class TransactionServiceTest {
 
         verify(transactionRepository, never()).findByIdempotencyKeyAndUserId(anyString(), anyLong());
         verify(accountServiceClient, never()).transfer(any(InternalTransferRequest.class), anyLong());
+    }
+
+    // ---- Transfer sayacı (banking.transfers) ----
+
+    @Test
+    void transfer_success_incrementsCompletedCounter() {
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
+                .thenReturn(new AccountResponse());
+
+        transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals(1.0, transferCount("completed", "none"));
+        assertEquals(1.0, totalTransferCount());
+    }
+
+    @Test
+    void transfer_accountServiceUnavailable_incrementsFailedUnavailableCounter() {
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.empty());
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
+                .thenThrow(new RuntimeException("Bağlantı hatası"));
+
+        transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals(1.0, transferCount("failed", "unavailable"));
+        assertEquals(0.0, transferCount("completed", "none"));
+        assertEquals(1.0, totalTransferCount());
+    }
+
+    @Test
+    void transfer_circuitBreakerOpen_incrementsFailedCircuitOpenCounter() {
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.empty());
+        CircuitBreaker circuitBreaker = CircuitBreaker.ofDefaults("accountService");
+        when(accountServiceClient.transfer(any(InternalTransferRequest.class), eq(TEST_USER_ID)))
+                .thenThrow(CallNotPermittedException.createCallNotPermittedException(circuitBreaker));
+
+        TransactionResponse response = transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals(TransactionStatus.FAILED, response.getStatus());
+        assertEquals(1.0, transferCount("failed", "circuit_open"));
+        assertEquals(1.0, totalTransferCount());
+    }
+
+    @Test
+    void transfer_existingIdempotencyKey_doesNotIncrementCounter() {
+
+        Transaction existing = new Transaction();
+        existing.setId(99L);
+        existing.setUserId(TEST_USER_ID);
+        existing.setSenderAccountId(1L);
+        existing.setReceiverAccountId(2L);
+        existing.setAmount(new BigDecimal("100.00"));
+        existing.setStatus(TransactionStatus.COMPLETED);
+        existing.setIdempotencyKey(TEST_IDEMPOTENCY_KEY);
+        existing.setCreatedAt(LocalDateTime.now());
+
+        when(transactionRepository.findByIdempotencyKeyAndUserId(TEST_IDEMPOTENCY_KEY, TEST_USER_ID))
+                .thenReturn(Optional.of(existing));
+
+        transactionService.transfer(transferRequest, TEST_USER_ID, TEST_IDEMPOTENCY_KEY);
+
+        assertEquals(0.0, totalTransferCount());
     }
 }
