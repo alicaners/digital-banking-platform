@@ -26,3 +26,14 @@ eureka:
 logging:
   pattern:
     level: "%5p [%X{correlationId:-}]"
+
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
