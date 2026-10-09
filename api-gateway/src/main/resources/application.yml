@@ -88,3 +88,14 @@ springdoc:
         url: /transaction-service/v3/api-docs
       - name: Notification Service
         url: /notification-service/v3/api-docs
+
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
