@@ -1,9 +1,12 @@
 package com.banking.auth.service;
 
 import com.banking.auth.dto.AuthResponse;
+import com.banking.auth.dto.LoginRequest;
+import com.banking.auth.dto.RefreshTokenRequest;
 import com.banking.auth.dto.RegisterRequest;
 import com.banking.auth.entity.Role;
 import com.banking.auth.entity.User;
+import com.banking.auth.exception.InvalidRefreshTokenException;
 import com.banking.auth.repository.UserRepository;
 import com.banking.auth.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,7 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import com.banking.auth.dto.LoginRequest;
+
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,6 +33,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private AuthService authService;
@@ -107,6 +113,7 @@ class AuthServiceTest {
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(existingUser));
         when(passwordEncoder.matches("sifre123", "hashedPassword")).thenReturn(true);
         when(jwtTokenProvider.generateToken(1L, "testuser", "CUSTOMER")).thenReturn("sahte.jwt.token");
+        when(refreshTokenService.create(1L)).thenReturn("sahte-refresh-token");
 
         AuthResponse response = authService.login(loginRequest);
 
@@ -114,6 +121,7 @@ class AuthServiceTest {
         assertEquals("test@example.com", response.getEmail());
         assertEquals("Giriş başarılı", response.getMessage());
         assertEquals("sahte.jwt.token", response.getToken());
+        assertEquals("sahte-refresh-token", response.getRefreshToken());
     }
 
     @Test
@@ -128,6 +136,7 @@ class AuthServiceTest {
 
         assertEquals("Kullanıcı adı veya şifre hatalı", exception.getMessage());
         verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
+        verify(refreshTokenService, never()).create(anyLong());
     }
 
     @Test
@@ -143,5 +152,65 @@ class AuthServiceTest {
 
         assertEquals("Kullanıcı adı veya şifre hatalı", exception.getMessage());
         verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
+        verify(refreshTokenService, never()).create(anyLong());
+    }
+
+    @Test
+    void refresh_validToken_returnsNewAccessAndRefreshToken() {
+
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("eski-refresh-token");
+
+        when(refreshTokenService.rotate("eski-refresh-token"))
+                .thenReturn(new RefreshTokenService.RotatedToken(1L, "yeni-refresh-token"));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.generateToken(1L, "testuser", "CUSTOMER")).thenReturn("yeni.jwt.token");
+
+        AuthResponse response = authService.refresh(request);
+
+        assertEquals("testuser", response.getUsername());
+        assertEquals("Token yenilendi", response.getMessage());
+        assertEquals("yeni.jwt.token", response.getToken());
+        assertEquals("yeni-refresh-token", response.getRefreshToken());
+    }
+
+    @Test
+    void refresh_invalidToken_throwsAndIssuesNoAccessToken() {
+
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("gecersiz");
+
+        when(refreshTokenService.rotate("gecersiz"))
+                .thenThrow(new InvalidRefreshTokenException("Geçersiz refresh token"));
+
+        assertThrows(InvalidRefreshTokenException.class, () -> authService.refresh(request));
+
+        verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void refresh_userNoLongerExists_throwsInvalidRefreshToken() {
+
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("eski-refresh-token");
+
+        when(refreshTokenService.rotate("eski-refresh-token"))
+                .thenReturn(new RefreshTokenService.RotatedToken(99L, "yeni-refresh-token"));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(InvalidRefreshTokenException.class, () -> authService.refresh(request));
+
+        verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void logout_revokesGivenRefreshToken() {
+
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("cikis-token");
+
+        authService.logout(request);
+
+        verify(refreshTokenService, times(1)).revoke("cikis-token");
     }
 }
