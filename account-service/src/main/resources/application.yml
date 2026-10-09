@@ -59,3 +59,14 @@ logging:
     level: "%5p [%X{correlationId:-}]"
   level:
     org.hibernate.SQL: debug
+
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
