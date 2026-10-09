@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: banking-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - banking-api-gateway:9100
+          - banking-auth-service:9100
+          - banking-customer-service:9100
+          - banking-account-service:9100
+          - banking-transaction-service:9100
+          - banking-notification-service:9100
+          - banking-eureka-server:9100

@@ -196,8 +196,24 @@ services:
     networks:
       - banking-network
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: banking-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - banking-network
+
 volumes:
   postgres-data:
+  prometheus-data:
 
 networks:
   banking-network:
