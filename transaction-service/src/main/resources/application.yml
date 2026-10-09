@@ -53,6 +53,17 @@ resilience4j:
       accountService:
         timeout-duration: 5s
 
+management:
+  server:
+    port: 9100
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 logging:
   pattern:
     level: "%5p [%X{correlationId:-}]"
