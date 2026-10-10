@@ -5,6 +5,20 @@
 Spring Boot ve Spring Cloud ile geliştirilmiş mikroservis mimarili
 dijital bankacılık platformu simülasyonu.
 
+**Öne çıkanlar**
+
+- **Dayanıklılık, ölçülerek doğrulandı:** Circuit Breaker, Retry, TimeLimiter ve
+  Idempotency-Key; gerçek bir servis kesintisinde k6 ve Grafana ile test edildi
+  (bkz. "Dayanıklılık ve Performans").
+- **Gözlemlenebilirlik:** Prometheus + Grafana dashboard'u, özel
+  `banking_transfers_total` metriği ve Gateway'den Kafka'ya kadar tek bir
+  `correlationId` ile JSON loglama.
+- **Güvenlik:** Gateway'de merkezi JWT doğrulama, kısa ömürlü access token +
+  refresh token (rotation, reuse tespiti, logout), ownership tabanlı yetkilendirme.
+- **Tek komutla çalışır:** `docker compose up -d --build` (13 container) ve
+  Postman'de tek tıkla çalışan uçtan uca senaryo (`postman/`).
+- **Sınırlamalar açıkça yazılı:** bilinen eksikler gizlenmedi (bkz. "Durum").
+
 ## Mimari
 
 Client → API Gateway (JWT doğrulama, Rate Limiting) → Eureka (Service Discovery) → İlgili Mikroservis
@@ -64,14 +78,16 @@ için başlamaz.)
 docker compose up -d --build
 ```
 
-Bu komut, altyapıyı (PostgreSQL, Kafka, Zookeeper, Redis) ve yedi
-mikroservisi hep birlikte, doğru sırayla başlatır — IntelliJ veya
-Maven kurmaya gerek kalmadan. `--build` bayrağı, ilk çalıştırmada
-image'ların Dockerfile'lardan sıfırdan inşa edilmesini sağlar; sonraki
-çalıştırmalarda `--build` olmadan da (`docker compose up -d`) kullanılabilir.
-Altyapı servisleri (Postgres, Redis, Zookeeper, Kafka, Eureka Server)
-için healthcheck tanımlıdır - uygulama servisleri, bu servisler sadece
-"başlamış" değil gerçekten "hazır" (healthy) olana kadar bekler.
+Bu komut, altyapıyı (PostgreSQL, Kafka, Zookeeper, Redis), yedi
+mikroservisi ve izleme araçlarını (Prometheus, Grafana) hep birlikte,
+doğru sırayla başlatır — IntelliJ veya Maven kurmaya gerek kalmadan.
+`--build` bayrağı, ilk çalıştırmada image'ların Dockerfile'lardan sıfırdan
+inşa edilmesini sağlar; sonraki çalıştırmalarda `--build` olmadan da
+(`docker compose up -d`) kullanılabilir. Altyapı servisleri (Postgres, Redis,
+Zookeeper, Kafka, Eureka Server) için healthcheck tanımlıdır - uygulama
+servisleri, bu servisler sadece "başlamış" değil gerçekten "hazır" (healthy)
+olana kadar bekler. Servislerin Eureka'ya kaydolması 30–90 saniye sürebilir;
+bu sürede ilk istekler başarısız olabilir.
 
 **Güvenlik notu:** Uygulama tarafında sadece api-gateway'in portu (8080)
 dışarıya açıktır. Diğer altı mikroservis yalnızca Docker network'ü
@@ -242,9 +258,9 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
 - **Integration test (Testcontainers)**: Account Service için gerçek
   bir PostgreSQL container'ında çalışan testler.
 - **Postman koleksiyonu**: `postman/` klasöründe, Gateway üzerinden uçtan uca
-    çalışan hazır bir koleksiyon (kayıt, giriş, müşteri, hesap, transfer,
-    refresh token ve logout; 17 istek, 32 otomatik test). Postman'e aktarıp
-    "Run collection" ile tek tıkla çalıştırılabilir (bkz. postman/README.md).
+  çalışan hazır bir koleksiyon (kayıt, giriş, müşteri, hesap, transfer,
+  refresh token ve logout; 17 istek, 32 otomatik test). Postman'e aktarıp
+  "Run collection" ile tek tıkla çalıştırılabilir (bkz. postman/README.md).
 - **Swagger/OpenAPI**: Beş servisin API'si, Gateway üzerinden tek bir
   merkezi sayfada toplandı: http://localhost:8080/swagger-ui.html
 - **Yük testi (k6)**: Gateway üzerinden uçtan uca çalışan iki senaryo:
@@ -280,38 +296,37 @@ Micrometer, Prometheus, Grafana
 
 ## Durum
 
-✅ Proje tamamlandı — 7 mikroservis, Eureka service discovery, Gateway
-üzerinden merkezi JWT doğrulama ve rate limiting, senkron (Feign) ve
-asenkron (Kafka) servisler arası iletişim, Circuit Breaker/Retry ile
-hata toleransı, Redis ile performans optimizasyonu, otomatik testler
-(Unit + Integration), merkezi API dokümantasyonu (Swagger), Docker ile
-tam konteynerleştirme ve GitHub Actions ile sürekli entegrasyon (CI).
+✅ Proje tamamlandı. Bir güvenlik/mimari incelemesi sonrası tespit edilen
+bulgular doğrultusunda yapılan sağlamlaştırma (hardening) turları da bitti.
 
-Devam eden çalışma: bir güvenlik/mimari incelemesi sonrası tespit
-edilen bulgular doğrultusunda sağlamlaştırma (hardening) çalışmaları
-sürdürülüyor. Gün 1 (hızlı güvenlik düzeltmeleri + yetkilendirme),
-Gün 2 (atomic transfer + idempotency/circuit breaker), Gün 3 (internal
-endpoint koruması, idempotency conflict handling, circuit breaker
-ayarları, optimistic locking), Gün 4 (domain validasyonları, Docker
-healthcheck'leri, rate limiter düzeltmesi, constructor injection,
-status/rol alanlarının enum'a çevrilmesi, listeleme endpoint'lerine
-sayfalama) ve ardından ikinci bir uçtan uca kod incelemesi sonrası ek
-düzeltmeler (circuit breaker'ın iş kuralı hatalarını arıza saymaması,
-veritabanı kimlik bilgilerinin ortam değişkenine taşınması, constructor
-injection tutarlılığının tamamlanması, Eureka Server için Docker
-healthcheck, Account Service → Customer Service çağrısına circuit
-breaker/retry koruması) tamamlandı (bkz. docs/asama8-notlar.md). Ardından
-k6 ile iki yük testi senaryosu eklendi: taban çizgisi ve gerçek bir servis
-kesintisinde Circuit Breaker davranışı (bkz. load-tests/README.md ve
-docs/asama8-notlar.md, "Yük Testi (k6)"). Ardından yapılandırılmış (JSON)
-loglama ve servisler arası correlationId izlenebilirliği eklendi
-(Gateway'den Kafka'ya kadar tek kimlik); bu çalışma sırasında bulunan bir
-zaman aşımı (TimeLimiter) hatası da düzeltildi (bkz. docs/asama8-notlar.md,
-"Yapılandırılmış Loglama ve correlationId"). Son olarak Prometheus ve
-Grafana ile metrik izleme eklendi: servis metrikleri, devre kesici ve rate
-limiter davranışı ve transfer sonuçları bir dashboard'da görülebiliyor; bu
-sayede k6 sırasında gözlenen circuit breaker davranışı sayılarla açıklandı
-(bkz. docs/asama8-notlar.md, "Metrikler ve İzleme (Prometheus + Grafana)").
-Ardından auth-service'e kısa ömürlü access token, refresh token (rotation ve
-reuse tespitiyle) ve logout eklendi (bkz. docs/asama8-notlar.md, "Refresh
-Token ve Logout").
+**Tamamlananlar**
+
+- 7 mikroservis, Eureka service discovery, Gateway üzerinden merkezi JWT
+  doğrulama ve rate limiting.
+- Senkron (Feign) ve asenkron (Kafka) servisler arası iletişim.
+- Circuit Breaker, Retry, TimeLimiter, Idempotency-Key ve optimistic locking
+  ile hata toleransı ve tutarlılık.
+- Redis ile performans optimizasyonu, sayfalama.
+- Refresh token (rotation, reuse tespiti) ve logout.
+- Yapılandırılmış JSON loglama ve servisler arası `correlationId`.
+- Prometheus + Grafana ile metrik izleme, özel transfer metriği.
+- k6 ile yük/dayanıklılık testleri, Postman ile uçtan uca senaryo.
+- Otomatik testler (Unit + Integration), Swagger, Docker/Docker Compose ve
+  GitHub Actions ile CI.
+
+**Bilinen sınırlamalar**
+
+- Logout sonrası mevcut access token, süresi dolana kadar (en fazla 15 dakika)
+  geçerli kalır; JWT kara listesi (örn. Redis) yok.
+- Aynı refresh token ile eşzamanlı gelen iki yenileme isteği için satır kilidi
+  yok; süresi dolmuş/iptal edilmiş token kayıtları için temizlik işi yok.
+- Zaman aşımı süresi aşılırsa Account Service işi tamamlasa bile transfer kaydı
+  `FAILED` kalabilir; belirsiz sonuçlar için mutabakat (reconciliation) adımı
+  yok.
+- Yük testleri tek sanal kullanıcıyla çalışır, gerçek bir eşzamanlı kapasite
+  testi değildir.
+- Grafana'da p95 gecikme (histogram) ve uyarı (alert) kuralları yok.
+- `ADMIN` rolü self-servis atanamaz, veritabanında elle verilir.
+
+Ayrıntılı geliştirme geçmişi, bulgular ve gerekçeler için bkz.
+`docs/asama5-notlar.md` ... `docs/asama8-notlar.md`.
