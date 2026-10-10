@@ -241,6 +241,10 @@ için tekrar kullanmaya çalışırsa (gövde uyuşmuyorsa) istek
   şüpheli değerin reddedilmesi, MDC'nin istek sonunda temizlenmesi).
 - **Integration test (Testcontainers)**: Account Service için gerçek
   bir PostgreSQL container'ında çalışan testler.
+- **Postman koleksiyonu**: `postman/` klasöründe, Gateway üzerinden uçtan uca
+    çalışan hazır bir koleksiyon (kayıt, giriş, müşteri, hesap, transfer,
+    refresh token ve logout; 17 istek, 32 otomatik test). Postman'e aktarıp
+    "Run collection" ile tek tıkla çalıştırılabilir (bkz. postman/README.md).
 - **Swagger/OpenAPI**: Beş servisin API'si, Gateway üzerinden tek bir
   merkezi sayfada toplandı: http://localhost:8080/swagger-ui.html
 - **Yük testi (k6)**: Gateway üzerinden uçtan uca çalışan iki senaryo:
